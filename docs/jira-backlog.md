@@ -6,14 +6,27 @@
 
 ---
 
+## Architecture: Service Mesh Comparison Platform
+
+This project provisions **one shared VPC** and **three independent EKS clusters**, one per service mesh under evaluation:
+
+| Environment | Cluster Name | Service Mesh | State Key |
+|-------------|-------------|--------------|-----------|
+| `shared` | — (VPC only) | — | `petclinic/shared/terraform.tfstate` |
+| `linkerd` | `petclinic-linkerd` | Linkerd | `petclinic/linkerd/terraform.tfstate` |
+| `istio` | `petclinic-istio` | Istio Ambient | `petclinic/istio/terraform.tfstate` |
+| `cilium` | `petclinic-cilium` | Cilium | `petclinic/cilium/terraform.tfstate` |
+
+Each cluster environment reads the shared VPC outputs via `terraform_remote_state`.
+
 ## Epics Overview
 
 | Epic # | Epic | Priority | Stories |
 |--------|------|----------|---------|
 | E-0 | Claude Code Setup | P0 | 5 |
 | E-1 | Foundation & Remote State | P0 | 5 |
-| E-2 | Networking (VPC) | P0 | 5 |
-| E-3 | EKS Cluster | P0 | 7 |
+| E-2 | Networking (Shared VPC) | P0 | 5 |
+| E-3 | EKS Clusters (linkerd, istio, cilium) | P0 | 9 |
 | E-4 | Container Registry (ECR) | P0 | 5 |
 | E-5 | Database (RDS MySQL) | P0 | 6 |
 | E-6 | DNS & Ingress | P1 | 5 |
@@ -28,7 +41,7 @@
 | E-15 | Documentation & Runbooks | P1 | 11 |
 | E-16 | Helm Charts | P0 | 5 |
 | E-17 | GitOps with ArgoCD | P0 | 5 |
-| | | **Total** | **108** |
+| | | **Total** | **110** |
 
 ---
 
@@ -37,26 +50,27 @@
 ```
 E-0 (Claude Code Setup) ──→ E-1 (Foundation)
 E-1 (Foundation)
- └─→ E-2 (VPC)
-      └─→ E-3 (EKS) ──→ E-8 (K8s Base) ──→ E-16 (Helm Charts)
-      │                    │                    │
-      │                    │                    └──→ E-17 (ArgoCD) ──→ E-14 (Scaling/Karpenter)
+ └─→ E-2 (Shared VPC)
+      └─→ E-3 (EKS ×3) ──→ E-8 (K8s Base) ──→ E-16 (Helm Charts)
+      │    ├── petclinic-linkerd               │
+      │    ├── petclinic-istio                 └──→ E-17 (ArgoCD) ──→ E-14 (Karpenter)
+      │    └── petclinic-cilium
       │                    │
-      └─→ E-5 (RDS) ──┐   └──→ E-10 (CI-only)
-      │                │
-      (E-12 Bastion — removed)
-                       │
- E-4 (ECR) ──────────→│──→ E-10 (CI-only)
-                       │
- E-7 (Secrets Mgr) ───→│──→ E-8 (K8s Base)
-                       │
- E-6 (DNS/Ingress) ───→│──→ E-8 (K8s Base)
-                       │
- E-11 (Observability) ─┘
+      │                    └──→ E-10 (CI-only)
+      │
+      └─→ E-5 (RDS — shared, all 3 clusters) ──┐
+                                                │
+ E-4 (ECR) ──────────────────────────────────→ │──→ E-10 (CI-only)
+                                                │
+ E-7 (Secrets Mgr) ─────────────────────────→ │──→ E-8 (K8s Base)
+                                                │
+ E-6 (DNS/Ingress) ──────────────────────────→ │──→ E-8 (K8s Base)
+                                                │
+ E-11 (Observability) ──────────────────────────┘
  E-13 (Security) — can run in parallel after E-3
  E-15 (Docs) — ongoing, finalize after all others
- E-16 (Helm Charts) — depends on E-8 (base manifests define what gets templated)
- E-17 (ArgoCD) — depends on E-3 (EKS), E-16 (Helm charts), E-4 (ECR)
+ E-16 (Helm Charts) — depends on E-8
+ E-17 (ArgoCD) — depends on E-3 (all 3 clusters), E-16, E-4
 ```
 
 ---
@@ -211,10 +225,12 @@ Create the Terraform directory structure in petclinic-platform with separate env
 **Technical Spec:** [General Project Parameters](./technical-spec.md#general-project-parameters), [Terraform Modules](./technical-spec.md#terraform-modules)
 
 **Acceptance Criteria:**
-- [ ] `terraform/environments/dev/` directory exists with main.tf, variables.tf, outputs.tf, backend.tf, terraform.tfvars
-- [ ] `terraform/environments/prod/` directory exists with same files
-- [ ] `terraform/modules/` directory exists with subdirectories: vpc, eks, ecr, rds, dns, secrets, observability
-- [ ] Each module dir has placeholder main.tf, variables.tf, outputs.tf
+- [ ] `terraform/environments/shared/` — VPC-only root module (main.tf, variables.tf, outputs.tf, versions.tf)
+- [ ] `terraform/environments/linkerd/` — EKS root module for Linkerd cluster (same files)
+- [ ] `terraform/environments/istio/` — EKS root module for Istio Ambient cluster (same files)
+- [ ] `terraform/environments/cilium/` — EKS root module for Cilium cluster (same files)
+- [ ] `terraform/modules/vpc/` with main.tf, variables.tf, outputs.tf, versions.tf
+- [ ] `terraform/modules/eks/` with main.tf, variables.tf, outputs.tf, versions.tf
 - [ ] .gitignore includes .terraform/, *.tfstate, *.tfstate.backup, *.tfvars (sensitive), plan.out, .env, *.pem, *.key, IDE files, OS files
 - [ ] .terraform.lock.hcl is NOT in .gitignore (must be committed for reproducible builds)
 
@@ -244,7 +260,7 @@ Create a bootstrap script that provisions the S3 bucket (versioning enabled, enc
 
 ---
 
-### PETPLAT-3: Configure Terraform backend for dev environment
+### PETPLAT-3: Configure Terraform backend for shared environment
 
 **Type:** Task
 **Priority:** P0
@@ -254,40 +270,40 @@ Create a bootstrap script that provisions the S3 bucket (versioning enabled, enc
 **Blocked by:** PETPLAT-2
 
 **Description:**
-Configure the S3 backend in `terraform/environments/dev/backend.tf` pointing to the state bucket with key `petclinic/dev/terraform.tfstate`. Configure DynamoDB locking.
+Configure the S3 backend in `terraform/environments/shared/versions.tf` (or `backend.tf`) pointing to the state bucket with key `petclinic/shared/terraform.tfstate`. This state is read by the three cluster environments via `terraform_remote_state`.
 
 **Technical Spec:** [Terraform State Backend](./technical-spec.md#terraform-state-backend)
 
 **Acceptance Criteria:**
-- [ ] `backend.tf` configured with S3 backend
-- [ ] State key: `petclinic/dev/terraform.tfstate`
+- [ ] Backend configured with S3 backend, state key: `petclinic/shared/terraform.tfstate`
 - [ ] DynamoDB table referenced for locking
-- [ ] Encryption enabled
-- [ ] Region set to eu-central-1
-- [ ] `terraform init` succeeds
+- [ ] Encryption enabled, region eu-central-1
+- [ ] `terraform init` succeeds in `terraform/environments/shared/`
+- [ ] Outputs (vpc_id, public_subnet_ids) are non-sensitive so remote state consumers can read them
 
 ---
 
-### PETPLAT-4: Configure Terraform backend for prod environment
+### PETPLAT-4: Configure Terraform backends for linkerd, istio, and cilium environments
 
 **Type:** Task
 **Priority:** P0
 **Epic:** E-1 Foundation & Remote State
-**Story Points:** 1
+**Story Points:** 2
 **Labels:** terraform, foundation
 **Blocked by:** PETPLAT-2
 
 **Description:**
-Configure the S3 backend in `terraform/environments/prod/backend.tf` with key `petclinic/prod/terraform.tfstate`. Same bucket, different state key.
+Configure S3 backends in each cluster environment. Each reads shared VPC state via `data "terraform_remote_state" "shared"` pointing to `petclinic/shared/terraform.tfstate`.
 
 **Technical Spec:** [Terraform State Backend](./technical-spec.md#terraform-state-backend)
 
 **Acceptance Criteria:**
-- [ ] `backend.tf` configured with S3 backend
-- [ ] State key: `petclinic/prod/terraform.tfstate`
-- [ ] DynamoDB table referenced for locking
-- [ ] Encryption enabled
-- [ ] `terraform init` succeeds
+- [ ] `terraform/environments/linkerd/` — state key: `petclinic/linkerd/terraform.tfstate`
+- [ ] `terraform/environments/istio/` — state key: `petclinic/istio/terraform.tfstate`
+- [ ] `terraform/environments/cilium/` — state key: `petclinic/cilium/terraform.tfstate`
+- [ ] Each has `data "terraform_remote_state" "shared"` block pointing to `petclinic/shared/terraform.tfstate`
+- [ ] `terraform init` succeeds in all three environments
+- [ ] `var.state_bucket` used (default: `petclinic-terraform-state`) so bucket name is not hardcoded
 
 ---
 
@@ -300,26 +316,25 @@ Configure the S3 backend in `terraform/environments/prod/backend.tf` with key `p
 **Labels:** terraform, foundation
 
 **Description:**
-Set up provider configuration and version constraints in both environment root modules. Pin Terraform >= 1.6.0 and AWS provider ~> 5.0.
+Set up provider configuration and version constraints in all four environment root modules (shared, linkerd, istio, cilium). Pin Terraform >= 1.6.0 and AWS provider ~> 5.0.
 
 **Technical Spec:** [General Project Parameters](./technical-spec.md#general-project-parameters)
 
 **Acceptance Criteria:**
-- [ ] `versions.tf` in both dev/ and prod/ with required_version >= 1.6.0
-- [ ] AWS provider source and version constraint (~> 5.0) defined
-- [ ] `providers.tf` in both environments configuring AWS provider with `var.aws_region`
-- [ ] `variables.tf` defines aws_region variable (default: eu-central-1)
-- [ ] `variables.tf` defines environment variable (dev or prod)
-- [ ] `variables.tf` defines project variable (default: petclinic)
-- [ ] Common tags defined: Project, Environment, ManagedBy=terraform
-- [ ] `terraform validate` passes in both environments
+- [ ] `versions.tf` in shared/, linkerd/, istio/, cilium/ with required_version >= 1.6.0
+- [ ] AWS provider source and version constraint (~> 5.0) defined in each
+- [ ] AWS provider configured with `var.aws_region` (default: eu-central-1)
+- [ ] `variables.tf` defines `aws_region` (default: eu-central-1) and `kubernetes_version` (default: 1.31)
+- [ ] `variables.tf` in cluster envs defines `state_bucket` (default: `petclinic-terraform-state`) for remote state reference
+- [ ] Common tags defined: `Project=petclinic`, `ManagedBy=terraform`, `ServiceMesh={linkerd|istio-ambient|cilium}` (cluster envs)
+- [ ] `terraform validate` passes in all four environments
 
 ---
 
-# EPIC E-2: Networking (VPC)
+# EPIC E-2: Networking (Shared VPC)
 
 **Priority:** P0
-**Description:** Build the VPC module with public subnets across multiple AZs, Internet Gateway, and baseline security groups. All-public subnet design (no NAT Gateway) to minimize student AWS costs — security groups enforce access control. See ADR-0001.
+**Description:** Build a single shared VPC deployed via `terraform/environments/shared/`. All three EKS clusters (linkerd, istio, cilium) share this VPC and reference it via `terraform_remote_state`. All-public subnet design (no NAT Gateway) to minimize costs — security groups enforce access control. See ADR-0001.
 **Blocked by:** E-1
 **Blocks:** E-3, E-5, E-6
 
@@ -346,16 +361,16 @@ Create a reusable VPC module in `terraform/modules/vpc/` that provisions:
 - Security groups are the primary access control mechanism
 
 **Acceptance Criteria:**
-- [ ] Module in `terraform/modules/vpc/` with main.tf, variables.tf, outputs.tf
+- [ ] Module in `terraform/modules/vpc/` with main.tf, variables.tf, outputs.tf, versions.tf
 - [ ] VPC created with DNS support and DNS hostnames enabled
 - [ ] 2 public subnets with `map_public_ip_on_launch = true`
-- [ ] Subnets spread across 2 AZs
+- [ ] Subnets spread across 2 AZs (eu-central-1a, eu-central-1b)
 - [ ] Internet Gateway attached
 - [ ] Route table: 0.0.0.0/0 → IGW
-- [ ] No NAT Gateway (intentional — cost saving for students)
-- [ ] Subnets tagged for EKS: `kubernetes.io/cluster/petclinic-{env}` = shared, `kubernetes.io/role/elb` = 1
+- [ ] No NAT Gateway (intentional — cost saving)
+- [ ] Subnets tagged `kubernetes.io/role/elb = 1` (EKS cluster-specific tags added by each cluster environment via `aws_ec2_tag`)
 - [ ] All resources tagged with Project, Environment, ManagedBy
-- [ ] Outputs: vpc_id, subnet_ids
+- [ ] Outputs: vpc_id, public_subnet_ids (consumed by all 3 cluster environments via remote state)
 - [ ] `terraform validate` passes
 
 ---
@@ -398,79 +413,66 @@ Security groups are the **primary access control boundary** in this all-public s
 
 ---
 
-### PETPLAT-9: Wire VPC module into dev environment
+### PETPLAT-9: Wire VPC module into shared environment
 
 **Type:** Task
 **Priority:** P0
-**Epic:** E-2 Networking
+**Epic:** E-2 Networking (Shared VPC)
 **Story Points:** 2
 **Labels:** terraform, networking
 **Blocked by:** PETPLAT-6, PETPLAT-8
 
 **Description:**
-Call the VPC module from `terraform/environments/dev/main.tf` with dev-appropriate values.
+Call the VPC module from `terraform/environments/shared/main.tf`. This is the single VPC shared by all three EKS cluster environments. Cluster-specific subnet tags (`kubernetes.io/cluster/{name}`) are applied by each cluster environment via `aws_ec2_tag`, not here.
 
 **Technical Spec:** [VPC Network Design](./technical-spec.md#vpc-network-design)
 
 **Acceptance Criteria:**
-- [ ] VPC module called in dev main.tf
-- [ ] VPC CIDR: 10.0.0.0/16
-- [ ] `terraform plan` shows expected resources (VPC, 2 subnets, IGW, route table, SGs)
-- [ ] `terraform apply` succeeds and creates the VPC
+- [ ] VPC module called in `terraform/environments/shared/main.tf` with `name = "petclinic-shared"`
+- [ ] VPC CIDR: 10.0.0.0/16, AZs: eu-central-1a, eu-central-1b
+- [ ] Public subnet CIDRs: 10.0.1.0/24, 10.0.2.0/24
+- [ ] Outputs exported: vpc_id, public_subnet_ids (referenced via remote state by all 3 cluster envs)
+- [ ] `terraform plan` shows expected resources (VPC, 2 subnets, IGW, route table)
+- [ ] `terraform apply` succeeds
 
 ---
 
-### PETPLAT-10: Wire VPC module into prod environment
+### PETPLAT-10: ~~Wire VPC module into prod environment~~ — superseded
 
-**Type:** Task
-**Priority:** P1
-**Epic:** E-2 Networking
-**Story Points:** 1
-**Labels:** terraform, networking
-**Blocked by:** PETPLAT-6, PETPLAT-8
-
-**Description:**
-Call the VPC module from `terraform/environments/prod/main.tf` with prod-appropriate values.
-
-**Technical Spec:** [VPC Network Design](./technical-spec.md#vpc-network-design)
-
-**Acceptance Criteria:**
-- [ ] VPC module called in prod main.tf
-- [ ] VPC CIDR: 10.1.0.0/16 (non-overlapping with dev)
-- [ ] `terraform plan` shows expected resources
+_This story is superseded by the service-mesh comparison architecture. There is no separate prod VPC. All three EKS clusters share a single VPC provisioned in `terraform/environments/shared/`. See PETPLAT-9._
 
 ---
 
-### PETPLAT-11: Deploy and verify dev VPC
+### PETPLAT-11: Deploy and verify shared VPC
 
 **Type:** Task
 **Priority:** P0
-**Epic:** E-2 Networking
+**Epic:** E-2 Networking (Shared VPC)
 **Story Points:** 2
 **Labels:** terraform, networking, deployment
 **Blocked by:** PETPLAT-9
 
 **Description:**
-Run `terraform apply` for the dev environment and verify the VPC is created correctly.
+Run `terraform apply` in `terraform/environments/shared/` and verify the shared VPC is created correctly. This must complete before any of the three cluster environments can be applied.
 
 **Technical Spec:** [VPC Network Design](./technical-spec.md#vpc-network-design)
 
 **Acceptance Criteria:**
-- [ ] `terraform apply` succeeds without errors
-- [ ] VPC visible in AWS Console with correct CIDR
-- [ ] 2 public subnets visible across 2 AZs
+- [ ] `terraform apply` succeeds without errors in `terraform/environments/shared/`
+- [ ] VPC (`petclinic-shared`) visible in AWS Console with CIDR 10.0.0.0/16
+- [ ] 2 public subnets visible across eu-central-1a, eu-central-1b
 - [ ] No NAT Gateway (intentional cost saving)
 - [ ] Route table: 0.0.0.0/0 → IGW
-- [ ] Subnets tagged for EKS
-- [ ] State file updated in S3
+- [ ] State file at `petclinic/shared/terraform.tfstate` in S3
+- [ ] `terraform output` returns vpc_id and public_subnet_ids (consumed by linkerd/istio/cilium envs)
 
 ---
 
-# EPIC E-3: EKS Cluster
+# EPIC E-3: EKS Clusters (linkerd, istio, cilium)
 
 **Priority:** P0
-**Description:** Create the EKS cluster module with managed node groups, OIDC provider for IRSA (IAM Roles for Service Accounts), and required IAM roles. The cluster will host all 8 microservices.
-**Blocked by:** E-2
+**Description:** Create three independent EKS clusters — one per service mesh — all sharing the VPC from E-2. A single reusable EKS module (`terraform/modules/eks/`) is instantiated from three environment root modules: `terraform/environments/linkerd/`, `terraform/environments/istio/`, and `terraform/environments/cilium/`. Each cluster gets its own IAM roles, OIDC provider, node group, and CloudWatch log group. The `ServiceMesh` tag differentiates clusters for cost allocation and filtering.
+**Blocked by:** E-2 (shared VPC must exist first)
 **Blocks:** E-8, E-9, E-10, E-11
 
 ---
@@ -479,30 +481,34 @@ Run `terraform apply` for the dev environment and verify the VPC is created corr
 
 **Type:** Story
 **Priority:** P0
-**Epic:** E-3 EKS Cluster
+**Epic:** E-3 EKS Clusters (linkerd, istio, cilium)
 **Story Points:** 5
 **Labels:** terraform, eks, iam
 **Blocked by:** PETPLAT-6
 
 **Description:**
-Create the EKS module in `terraform/modules/eks/` that provisions:
+Create the reusable EKS module in `terraform/modules/eks/` — instantiated three times (once per cluster environment). Provisions:
+- EKS cluster with configurable Kubernetes version (default 1.31)
+- Cluster IAM role + AmazonEKSClusterPolicy
+- Node IAM role + required policies (WorkerNode, CNI, ECR read-only)
+- OIDC provider for IRSA
+- Cluster + node security groups with minimal rules
+- CloudWatch log group for control plane logs
+- Subnet tags (`kubernetes.io/cluster/{name}=shared`) via `aws_ec2_tag` on the shared subnets
+- Core add-ons: coredns, kube-proxy, vpc-cni
 
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster), [Terraform Modules](./technical-spec.md#terraform-modules)
-- EKS cluster with Kubernetes version 1.29+
-- Cluster IAM role with AmazonEKSClusterPolicy
-- OIDC provider for IRSA (IAM Roles for Service Accounts)
-- Cluster placed in public subnets (all-public design, see ADR-0001)
-- API server endpoint access: public (CIDR-restricted where possible)
 
 **Acceptance Criteria:**
-- [ ] Module in `terraform/modules/eks/`
-- [ ] EKS cluster created with specified K8s version
-- [ ] Cluster IAM role with AmazonEKSClusterPolicy attached
-- [ ] OIDC provider created from cluster identity issuer
-- [ ] Cluster uses public subnets
-- [ ] Cluster security group attached
-- [ ] Cluster logging enabled (api, audit, authenticator)
-- [ ] Outputs: cluster_name, cluster_endpoint, cluster_ca_certificate, oidc_provider_arn, oidc_provider_url
+- [ ] Module in `terraform/modules/eks/` with main.tf, variables.tf, outputs.tf, versions.tf
+- [ ] `var.cluster_name` drives all resource names and tags
+- [ ] `var.tags` merged onto all resources (used to set `ServiceMesh` tag per environment)
+- [ ] OIDC provider created from cluster identity issuer (required for IRSA)
+- [ ] `access_config { authentication_mode = "API_AND_CONFIG_MAP" }` set
+- [ ] Cluster logging: api, audit, authenticator
+- [ ] Managed node group: `ami_type = "AL2_ARM_64"`, default `instance_types = ["t4g.small"]`
+- [ ] Add-on versions configurable via `var.addon_versions` (optional, default to AWS-managed)
+- [ ] Outputs: cluster_name, cluster_endpoint, cluster_ca_certificate, oidc_provider_arn, oidc_provider_url, node_group_name, node_role_arn
 - [ ] `terraform validate` passes
 
 ---
@@ -511,129 +517,148 @@ Create the EKS module in `terraform/modules/eks/` that provisions:
 
 **Type:** Story
 **Priority:** P0
-**Epic:** E-3 EKS Cluster
-**Story Points:** 5
+**Epic:** E-3 EKS Clusters (linkerd, istio, cilium)
+**Story Points:** 3
 **Labels:** terraform, eks, compute
 **Blocked by:** PETPLAT-12
 
 **Description:**
-Add a managed node group configuration to the EKS module:
+The managed node group is included in the EKS module (PETPLAT-12). This story covers verifying and tuning the node group configuration for the service-mesh comparison use case — all three clusters use identical node sizing.
 
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster)
-- Node IAM role with required policies (EKSWorkerNodePolicy, EKS_CNI_Policy, EC2ContainerRegistryReadOnly)
-- Configurable instance types, min/max/desired sizes
-- Nodes in public subnets (all-public design)
-- Node labels and taints support
 
 **Acceptance Criteria:**
-- [ ] Managed node group resource created
-- [ ] Node IAM role with AmazonEKSWorkerNodePolicy, AmazonEKS_CNI_Policy, AmazonEC2ContainerRegistryReadOnly
-- [ ] Instance types configurable (default: ["t4g.small"] for dev — ARM/Graviton, free trial)
-- [ ] Scaling config: min_size, max_size, desired_size as variables
-- [ ] Nodes launched in public subnets
-- [ ] Disk size configurable (default: 20 GB — fits within 30 GB EBS free tier)
-- [ ] Node security group attached
-- [ ] Labels: environment, managed-by
-- [ ] Outputs: node_group_name, node_role_arn
+- [ ] `ami_type = "AL2_ARM_64"`, `capacity_type = "ON_DEMAND"` (Graviton t4g)
+- [ ] Default: `instance_types = ["t4g.small"]`, desired=2, min=2, max=4, disk=20GB
+- [ ] `update_config { max_unavailable = 1 }` set
+- [ ] Nodes launched in the shared public subnets (via `var.subnet_ids` from remote state)
+- [ ] Node group name: `{cluster_name}-nodes`
 - [ ] `terraform validate` passes
 
 ---
 
-### PETPLAT-14: Create kubectl access configuration
+### PETPLAT-14: Create kubectl access configuration for all three clusters
 
 **Type:** Task
 **Priority:** P0
-**Epic:** E-3 EKS Cluster
+**Epic:** E-3 EKS Clusters (linkerd, istio, cilium)
 **Story Points:** 2
 **Labels:** eks, access
 **Blocked by:** PETPLAT-12
 
 **Description:**
-Add EKS access entry or aws-auth ConfigMap configuration so the deploying IAM user/role can access the cluster. Add outputs or a script for `aws eks update-kubeconfig`.
+Each cluster uses `authentication_mode = "API_AND_CONFIG_MAP"`. Add access entry or aws-auth ConfigMap config so the deploying IAM principal can reach all three clusters. Add a helper script or per-cluster output for kubeconfig update.
 
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster)
 
 **Acceptance Criteria:**
-- [ ] EKS access entry configured for the deploying IAM principal
-- [ ] Output: kubeconfig update command (`aws eks update-kubeconfig --name <cluster> --region <region>`)
-- [ ] After apply, `kubectl get nodes` works
-- [ ] Documentation: how to add additional users/roles
+- [ ] EKS access entry (or aws-auth) configured for the deploying IAM principal on each cluster
+- [ ] Outputs include kubeconfig update command per cluster:
+  - `aws eks update-kubeconfig --name petclinic-linkerd --region eu-central-1`
+  - `aws eks update-kubeconfig --name petclinic-istio --region eu-central-1`
+  - `aws eks update-kubeconfig --name petclinic-cilium --region eu-central-1`
+- [ ] After apply, `kubectl get nodes` works against each cluster
+- [ ] `scripts/kubeconfig-all.sh` (optional) updates kubeconfig for all three clusters in one shot
 
 ---
 
-### PETPLAT-15: Wire EKS module into dev environment
+### PETPLAT-15: Wire EKS module into linkerd environment
 
 **Type:** Task
 **Priority:** P0
-**Epic:** E-3 EKS Cluster
+**Epic:** E-3 EKS Clusters (linkerd, istio, cilium)
 **Story Points:** 2
-**Labels:** terraform, eks
+**Labels:** terraform, eks, linkerd
 **Blocked by:** PETPLAT-12, PETPLAT-13, PETPLAT-9
 
 **Description:**
-Call the EKS module from dev environment with dev-appropriate sizing.
+Call the EKS module from `terraform/environments/linkerd/main.tf`. VPC and subnet IDs come from `data.terraform_remote_state.shared`.
 
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster)
 
 **Acceptance Criteria:**
-- [ ] EKS module called in dev main.tf
-- [ ] Cluster name: petclinic-dev
-- [ ] Node group: t4g.small (ARM/Graviton free trial), min=2, max=4, desired=2
-- [ ] VPC and subnet IDs passed from VPC module outputs
-- [ ] Security group IDs passed
+- [ ] EKS module called in `terraform/environments/linkerd/main.tf`
+- [ ] `cluster_name = "petclinic-linkerd"`
+- [ ] `tags = { ServiceMesh = "linkerd" }` passed to module
+- [ ] `vpc_id` and `subnet_ids` sourced from `data.terraform_remote_state.shared.outputs`
+- [ ] `kubernetes_version` from `var.kubernetes_version` (default 1.31)
 - [ ] `terraform plan` shows expected resources
 
 ---
 
-### PETPLAT-16: Deploy and verify dev EKS cluster
+### PETPLAT-16: Deploy and verify linkerd EKS cluster
 
 **Type:** Task
 **Priority:** P0
-**Epic:** E-3 EKS Cluster
+**Epic:** E-3 EKS Clusters (linkerd, istio, cilium)
 **Story Points:** 3
-**Labels:** terraform, eks, deployment
+**Labels:** terraform, eks, deployment, linkerd
 **Blocked by:** PETPLAT-15, PETPLAT-11
 
 **Description:**
-Run `terraform apply` and verify the EKS cluster is operational.
+Run `terraform apply` in `terraform/environments/linkerd/` and verify the cluster is operational. Repeat for istio and cilium once linkerd validates the module works.
 
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster)
 
 **Acceptance Criteria:**
-- [ ] `terraform apply` succeeds
-- [ ] Cluster status: ACTIVE
-- [ ] Nodes visible: `kubectl get nodes` shows 2 Ready nodes
+- [ ] `terraform apply` succeeds in `terraform/environments/linkerd/`
+- [ ] Cluster `petclinic-linkerd` status: ACTIVE
+- [ ] `kubectl get nodes` shows 2 Ready ARM nodes (t4g.small)
 - [ ] OIDC provider visible in IAM console
-- [ ] CoreDNS and kube-proxy running: `kubectl get pods -n kube-system`
+- [ ] CoreDNS, kube-proxy, vpc-cni add-ons running in kube-system
+- [ ] State at `petclinic/linkerd/terraform.tfstate` in S3
 
 ---
 
-### PETPLAT-17: Wire EKS module into prod environment
+### PETPLAT-17: Wire and deploy istio and cilium EKS clusters
 
 **Type:** Task
-**Priority:** P1
-**Epic:** E-3 EKS Cluster
-**Story Points:** 1
-**Labels:** terraform, eks
-**Blocked by:** PETPLAT-12, PETPLAT-13, PETPLAT-10
+**Priority:** P0
+**Epic:** E-3 EKS Clusters (linkerd, istio, cilium)
+**Story Points:** 3
+**Labels:** terraform, eks, istio, cilium
+**Blocked by:** PETPLAT-16
 
 **Description:**
-Call the EKS module from prod environment with prod-appropriate sizing.
+Apply the same EKS module wiring to `terraform/environments/istio/` and `terraform/environments/cilium/`. The module is identical — only `cluster_name` and `ServiceMesh` tag differ.
 
 **Technical Spec:** [EKS Cluster](./technical-spec.md#eks-cluster)
 
 **Acceptance Criteria:**
-- [ ] Cluster name: petclinic-prod
-- [ ] Node group: t4g.small (ARM/Graviton free trial), min=2, max=4, desired=2
-- [ ] VPC and subnet IDs from prod VPC module
-- [ ] `terraform plan` shows expected resources
+- [ ] `terraform/environments/istio/main.tf`: `cluster_name = "petclinic-istio"`, `tags = { ServiceMesh = "istio-ambient" }`
+- [ ] `terraform/environments/cilium/main.tf`: `cluster_name = "petclinic-cilium"`, `tags = { ServiceMesh = "cilium" }`
+- [ ] `terraform apply` succeeds in both environments
+- [ ] All three clusters visible in EKS console in eu-central-1
+- [ ] State files at `petclinic/istio/` and `petclinic/cilium/` in S3
+- [ ] `kubectl get nodes` returns 2 Ready nodes on each cluster
+
+---
+
+### PETPLAT-17b: Install service mesh on each cluster
+
+**Type:** Story
+**Priority:** P0
+**Epic:** E-3 EKS Clusters (linkerd, istio, cilium)
+**Story Points:** 5
+**Labels:** eks, linkerd, istio, cilium, service-mesh
+**Blocked by:** PETPLAT-17
+
+**Description:**
+Install the respective service mesh on each cluster post-EKS provisioning. This is the core of the comparison platform — each cluster runs the same Petclinic workload under a different mesh.
+
+**Acceptance Criteria:**
+- [ ] **linkerd**: `linkerd install --crds | kubectl apply -f -` → `linkerd install | kubectl apply -f -` → `linkerd check`
+- [ ] **istio**: Istio Ambient mode installed via `istioctl install --set profile=ambient`; no sidecar injection, ztunnel DaemonSet running
+- [ ] **cilium**: Cilium CNI replaced or configured with service mesh features enabled (`--helm-set kubeProxyReplacement=strict`)
+- [ ] Each cluster has the mesh's control plane healthy before Petclinic workloads are deployed
+- [ ] Mesh installation steps documented in `docs/runbook.md`
 
 ---
 
 # EPIC E-4: Container Registry (ECR)
 
 **Priority:** P0
-**Description:** Create ECR private repositories for all 8 microservices with lifecycle policies, scan-on-push, and configurable tag immutability (MUTABLE dev, IMMUTABLE prod). Images stored at `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-{env}/{service}:{tag}`. Cost: ~$1/month beyond 500 MB free tier.
+**Description:** Create a single shared ECR registry with repositories for all 8 microservices. All three EKS clusters (linkerd, istio, cilium) pull from the same ECR repos — no per-cluster registry duplication. Lifecycle policies, scan-on-push, and MUTABLE tags (lab environment). Images stored at `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic/{service}:{commit-sha}`. Cost: ~$1/month beyond 500 MB free tier.
 **Blocked by:** E-1
 **Blocks:** E-10, E-17
 
@@ -689,7 +714,7 @@ Configure ECR lifecycle policies to automatically clean up old images and manage
 
 ---
 
-### PETPLAT-20: Wire ECR module into dev environment and deploy
+### PETPLAT-20: Wire ECR module into shared environment and deploy
 
 **Type:** Task
 **Priority:** P0
@@ -699,16 +724,17 @@ Configure ECR lifecycle policies to automatically clean up old images and manage
 **Blocked by:** PETPLAT-18
 
 **Description:**
-Call the ECR module from dev environment with all 8 service names and deploy. ECR repos are per-environment (separate repos for dev and prod to isolate images).
+Call the ECR module from `terraform/environments/shared/main.tf` — one registry shared by all three clusters. All clusters pull images by commit SHA tag; no per-cluster repo duplication needed.
 
 **Technical Spec:** [ECR Container Registry](./technical-spec.md#ecr-container-registry)
 
 **Acceptance Criteria:**
 - [ ] ECR module called with service_names: [config-server, discovery-server, api-gateway, customers-service, visits-service, vets-service, genai-service, admin-server]
-- [ ] `terraform apply` succeeds
-- [ ] 8 ECR repositories visible in eu-central-1 under `petclinic-dev/` prefix
+- [ ] `terraform apply` succeeds in `terraform/environments/shared/`
+- [ ] 8 ECR repositories visible in eu-central-1 under `petclinic/` prefix
 - [ ] Repository URIs accessible and correct
 - [ ] Scan-on-push enabled on all repos
+- [ ] All three cluster node IAM roles have `AmazonEC2ContainerRegistryReadOnly` (granted via EKS module)
 
 ---
 
@@ -737,8 +763,8 @@ Create `scripts/ecr-login.sh` that authenticates Docker to the ECR private regis
 # EPIC E-5: Database (RDS MySQL)
 
 **Priority:** P0
-**Description:** Provision RDS MySQL for the three database-backed services (customers, visits, vets). All three share a single `petclinic` database on the same RDS instance (confirmed by cross-service FK constraints). Include encryption, backup, and secrets.
-**Blocked by:** E-2
+**Description:** Provision a single RDS MySQL instance in the `shared` environment alongside the VPC. All three service mesh clusters connect to this one instance. The three database-backed services (customers, visits, vets) share a single `petclinic` database (cross-service FK constraints confirmed). Include encryption, backup, and Secrets Manager integration.
+**Blocked by:** E-2 (shared VPC)
 **Blocks:** E-7, E-8
 
 ---
@@ -792,7 +818,7 @@ Store the RDS master credentials in AWS Secrets Manager via Terraform. Generate 
 **Acceptance Criteria:**
 - [ ] Random password generated using `random_password` resource (16+ chars, special chars)
 - [ ] Secrets created using `aws_secretsmanager_secret` and `aws_secretsmanager_secret_version` resources
-- [ ] Secret name: `petclinic/{env}/rds-credentials` (single JSON secret with `username` and `password` keys)
+- [ ] Secret name: `petclinic/shared/rds-credentials` (single JSON secret with `username` and `password` keys)
 - [ ] RDS instance references the generated password
 - [ ] Secret values NOT in Terraform state as plaintext (use `sensitive = true`)
 - [ ] Output: secret ARNs (for External Secrets Operator later)
@@ -823,7 +849,7 @@ Document and implement how the shared `petclinic` MySQL database gets its schema
 
 ---
 
-### PETPLAT-25: Wire RDS module into dev environment
+### PETPLAT-25: Wire RDS module into shared environment
 
 **Type:** Task
 **Priority:** P0
@@ -833,22 +859,23 @@ Document and implement how the shared `petclinic` MySQL database gets its schema
 **Blocked by:** PETPLAT-22, PETPLAT-23, PETPLAT-9
 
 **Description:**
-Call the RDS module from dev environment.
+RDS is provisioned once in `terraform/environments/shared/` alongside the VPC — a single MySQL instance is shared by all three EKS clusters. The three database-backed services (customers, visits, vets) all connect to the same `petclinic` database regardless of which mesh cluster they run on.
 
 **Technical Spec:** [RDS Database](./technical-spec.md#rds-database)
 
 **Acceptance Criteria:**
-- [ ] RDS module called in dev main.tf
-- [ ] Instance class: db.t4g.micro (free tier)
-- [ ] Multi-AZ: false
-- [ ] Skip final snapshot: true
+- [ ] RDS module called in `terraform/environments/shared/main.tf`
+- [ ] Instance class: db.t4g.micro (free tier, ARM/Graviton)
+- [ ] Multi-AZ: false (cost optimization)
+- [ ] Skip final snapshot: true (lab environment)
 - [ ] Backup retention: 7 days
-- [ ] Subnets and RDS SG from VPC module
+- [ ] Subnets and RDS SG from VPC module outputs (within shared env)
 - [ ] `terraform plan` shows expected resources
+- [ ] RDS endpoint exported as output so cluster environments can reference it
 
 ---
 
-### PETPLAT-26: Deploy and verify dev RDS
+### PETPLAT-26: Deploy and verify shared RDS
 
 **Type:** Task
 **Priority:** P0
@@ -858,39 +885,22 @@ Call the RDS module from dev environment.
 **Blocked by:** PETPLAT-25, PETPLAT-11
 
 **Description:**
-Deploy RDS to dev and verify connectivity from EKS pod.
+Deploy RDS in the shared environment and verify connectivity from a pod on any of the three EKS clusters. All three clusters' nodes reside in the same VPC so connectivity is identical.
 
 **Technical Spec:** [RDS Database](./technical-spec.md#rds-database)
 
 **Acceptance Criteria:**
-- [ ] `terraform apply` succeeds
+- [ ] `terraform apply` succeeds in `terraform/environments/shared/`
 - [ ] RDS instance status: available
-- [ ] Endpoint accessible from EKS node (test via debug pod: `kubectl run`)
-- [ ] Can connect with credentials from Secrets Manager
-- [ ] Secrets stored correctly in Secrets Manager (`petclinic/{env}/rds-credentials`)
+- [ ] Endpoint accessible from EKS node on any cluster (test via `kubectl run` debug pod)
+- [ ] Can connect with credentials from Secrets Manager (`petclinic/shared/rds-credentials`)
+- [ ] RDS SG restricts 3306 to EKS node SG only — not open to internet
 
 ---
 
-### PETPLAT-27: Wire RDS module into prod environment
+### PETPLAT-27: ~~Wire RDS module into prod environment~~ — superseded
 
-**Type:** Task
-**Priority:** P1
-**Epic:** E-5 Database
-**Story Points:** 1
-**Labels:** terraform, rds
-**Blocked by:** PETPLAT-22, PETPLAT-23, PETPLAT-10
-
-**Description:**
-Call the RDS module from prod environment with prod-appropriate config.
-
-**Technical Spec:** [RDS Database](./technical-spec.md#rds-database)
-
-**Acceptance Criteria:**
-- [ ] Instance class: db.t4g.micro (free tier, same as dev — cost optimization for learning)
-- [ ] Multi-AZ: false (single-AZ to save cost; note: in real production, enable Multi-AZ)
-- [ ] Skip final snapshot: false
-- [ ] Backup retention: 30 days
-- [ ] `terraform plan` shows expected resources
+_Superseded by the service-mesh comparison architecture. There is no separate prod environment. A single shared RDS instance serves all three clusters. See PETPLAT-25._
 
 ---
 
@@ -992,7 +1002,7 @@ Create a Route 53 A record (alias) pointing the domain to the ALB created by the
 **Technical Spec:** [DNS and Ingress](./technical-spec.md#dns-and-ingress)
 
 **Acceptance Criteria:**
-- [ ] Route 53 alias record created (e.g., petclinic-dev.example.com → ALB)
+- [ ] Route 53 alias record created per cluster (e.g., petclinic-linkerd.example.com, petclinic-istio.example.com, petclinic-cilium.example.com → respective ALBs)
 - [ ] Record type: A with alias to ALB
 - [ ] App accessible via domain name over HTTPS
 - [ ] HTTP redirects to HTTPS
@@ -1169,13 +1179,14 @@ Create an IAM role with a trust policy for the ESO service account (IRSA) with p
 **Blocked by:** PETPLAT-16
 
 **Description:**
-Create namespace definitions for dev and prod.
+Create namespace definitions — one namespace per cluster (applied to the matching cluster). Each namespace is labeled for the service mesh it runs under.
 
 **Technical Spec:** [Kubernetes Manifests](./technical-spec.md#kubernetes-manifests)
 
 **Acceptance Criteria:**
-- [ ] `k8s/base/namespaces.yaml` with petclinic-dev and petclinic-prod namespaces
-- [ ] Namespaces labeled: app.kubernetes.io/part-of=petclinic, environment={dev,prod}
+- [ ] `k8s/base/namespaces.yaml` with petclinic-linkerd, petclinic-istio, petclinic-cilium namespaces (applied to respective cluster)
+- [ ] Namespaces labeled: `app.kubernetes.io/part-of=petclinic`, `service-mesh={linkerd|istio|cilium}`
+- [ ] Mesh-specific labels added where required (Linkerd injection annotation, Istio ambient label `istio.io/dataplane-mode=ambient`)
 - [ ] `kubectl apply --dry-run=client` passes
 
 ---
@@ -1333,13 +1344,13 @@ Spring Boot Admin for monitoring all services.
 # EPIC E-9: Kubernetes Manifests — Overlays
 
 **Priority:** P1
-**Description:** Create environment-specific overlays for dev and prod that patch replica counts, resource limits, HPA, and image tags. Note: With the adoption of Helm (E-16), environment differences will ultimately be expressed as Helm values files. These overlay definitions inform the Helm values structure.
+**Description:** Create per-mesh overlay values that patch replica counts, resource limits, HPA, and image tags for each service mesh cluster. With Helm (E-16), cluster differences are expressed as Helm values files (`helm-values/linkerd.yaml`, `helm-values/istio.yaml`, `helm-values/cilium.yaml`). These overlay definitions inform the Helm values structure.
 **Blocked by:** E-8
 **Blocks:** E-14, E-16
 
 ---
 
-### PETPLAT-45: Create dev overlay patches
+### PETPLAT-45: Create per-mesh overlay values (linkerd, istio, cilium)
 
 **Type:** Story
 **Priority:** P0
@@ -1349,54 +1360,35 @@ Spring Boot Admin for monitoring all services.
 **Blocked by:** PETPLAT-38 through PETPLAT-44
 
 **Description:**
-Define dev environment settings that patch base manifests for the dev environment. These settings will be captured as Helm values files in E-16. The overlay definitions serve as the requirements for `helm-values/dev.yaml`.
+Define per-cluster Helm values for each service mesh cluster. All three run the same workload with the same replica counts — differences are the namespace, mesh-specific annotations, and any sidecar/ambient labels. These requirements feed into `helm-values/{linkerd,istio,cilium}.yaml` in E-16.
 
 **Technical Spec:** [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays), [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] Dev environment settings defined (to be expressed as Helm values)
-- [ ] All services: 1 replica
-- [ ] Resource limits appropriate for dev (can be smaller)
-- [ ] Namespace: petclinic-dev
-- [ ] Image tags use SHA-based tags (consistent with CI/CD); initial deploy uses tag from PETPLAT-85
-- [ ] Settings documented for translation into `helm-values/dev.yaml` (E-16)
+- [ ] All services: 1 replica per cluster (lab sizing — t4g.small nodes)
+- [ ] Namespaces: `petclinic-linkerd` / `petclinic-istio` / `petclinic-cilium` per cluster
+- [ ] Image tags: SHA-based (same image pulled by all three clusters)
+- [ ] Linkerd values: `podAnnotations: linkerd.io/inject: enabled`
+- [ ] Istio values: namespace label `istio.io/dataplane-mode: ambient` (no per-pod annotations needed)
+- [ ] Cilium values: no mesh annotations needed (CNI-level)
+- [ ] Settings documented for translation into `helm-values/{linkerd,istio,cilium}.yaml` (E-16)
 
 ---
 
-### PETPLAT-46: Create prod overlay patches
+### PETPLAT-46: ~~Create prod overlay patches~~ — superseded
+
+_Superseded by the service-mesh comparison architecture. There is no prod environment. Per-mesh overlay values are defined in PETPLAT-45._
+
+---
+
+### PETPLAT-47: Add Horizontal Pod Autoscaler (all clusters)
 
 **Type:** Story
 **Priority:** P1
 **Epic:** E-9 K8s Overlays
 **Story Points:** 3
-**Labels:** k8s, overlays
-**Blocked by:** PETPLAT-38 through PETPLAT-44
-
-**Description:**
-Define prod environment settings with production-appropriate configuration. These settings will be captured as Helm values files in E-16. The overlay definitions serve as the requirements for `helm-values/prod.yaml`.
-
-**Technical Spec:** [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays), [Helm Charts](./technical-spec.md#helm-charts)
-
-**Acceptance Criteria:**
-- [ ] Prod environment settings defined (to be expressed as Helm values)
-- [ ] Domain services: 2 replicas minimum
-- [ ] Infrastructure services (config, discovery): 2 replicas for HA
-- [ ] API Gateway: 2-3 replicas
-- [ ] Namespace: petclinic-prod
-- [ ] Image tags use SHA-based or release tags
-- [ ] Resource limits increased where appropriate
-- [ ] Settings documented for translation into `helm-values/prod.yaml` (E-16)
-
----
-
-### PETPLAT-47: Add Horizontal Pod Autoscaler for prod
-
-**Type:** Story
-**Priority:** P1
-**Epic:** E-9 K8s Overlays
-**Story Points:** 3
-**Labels:** k8s, scaling, prod
-**Blocked by:** PETPLAT-46, PETPLAT-72
+**Labels:** k8s, scaling
+**Blocked by:** PETPLAT-45, PETPLAT-72
 
 **Description:**
 Add HPA resources in prod overlay for stateless services.
@@ -1427,7 +1419,7 @@ Deploy all 8 services to dev namespace and verify the full application is workin
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays), [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] All 8 deployments running in petclinic-dev namespace
+- [ ] All 8 deployments running in petclinic-linkerd namespace (validate linkerd cluster first; repeat for istio and cilium)
 - [ ] All pods in Ready state
 - [ ] Config Server healthy: `curl config-server:8888/actuator/health`
 - [ ] Discovery Server shows all services registered: `curl discovery-server:8761/eureka/apps`
@@ -1472,7 +1464,7 @@ Create the GitHub Actions workflow that builds Docker images for changed service
 - [ ] Build image for each changed service — `--platform linux/arm64`
 - [ ] Trivy scan each image before push — fail on CRITICAL vulnerabilities
 - [ ] Tag with 7-character commit SHA — `github.sha[:7]`
-- [ ] Push to ECR: `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/{service}:{sha}`
+- [ ] Push to ECR: `{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic/{service}:{sha}`
 - [ ] After all changed services are pushed, fire `repository_dispatch` event type `app-image-built` to the platform repo using `PLATFORM_REPO_TOKEN` secret — payload includes SHA and list of changed services only
 - [ ] Pipeline succeeds end-to-end
 
@@ -2250,7 +2242,7 @@ Perform the first-time manual build of all 8 Docker images from the application 
 - [ ] `./mvnw clean install -P buildDocker` succeeds (all 8 images built)
 - [ ] ECR login successful: `aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin {account}.dkr.ecr.eu-central-1.amazonaws.com`
 - [ ] All 8 images tagged with initial version (e.g., `v1.0.0` or commit SHA)
-- [ ] All 8 images pushed to ECR (`{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic-dev/{service}:{tag}`)
+- [ ] All 8 images pushed to ECR (`{account}.dkr.ecr.eu-central-1.amazonaws.com/petclinic/{service}:{tag}`)
 - [ ] Verified: images visible in AWS ECR Console
 - [ ] Documented: the build and push commands for reference
 
@@ -2565,7 +2557,7 @@ Enable Pod Security Admission (PSA) at the namespace level and set SecurityConte
 **Technical Spec:** [Kubernetes Manifests](./technical-spec.md#kubernetes-manifests), [Security Controls](./technical-spec.md#security-controls)
 
 **Acceptance Criteria:**
-- [ ] PSA labels applied to petclinic-dev and petclinic-prod namespaces (enforce: baseline, warn: restricted)
+- [ ] PSA labels applied to petclinic-linkerd, petclinic-istio, petclinic-cilium namespaces (enforce: baseline, warn: restricted)
 - [ ] All Deployments in base manifests set SecurityContext: runAsNonRoot: true
 - [ ] All containers: readOnlyRootFilesystem: true (where possible — Spring Boot may need /tmp writable)
 - [ ] All containers: drop ALL capabilities, add only NET_BIND_SERVICE if needed
@@ -2737,27 +2729,26 @@ Create per-service values files at `helm-values/{service}.yaml` for all 8 Petcli
 
 ---
 
-### PETPLAT-109: Create per-environment Helm values files
+### PETPLAT-109: Create per-mesh Helm values files
 
 **Type:** Story
 **Priority:** P0
 **Epic:** E-16 Helm Charts
 **Story Points:** 3
 **Labels:** helm, k8s, environments
-**Blocked by:** PETPLAT-107, PETPLAT-45, PETPLAT-46
+**Blocked by:** PETPLAT-107, PETPLAT-45
 
 **Description:**
-Create environment-specific values files at `helm-values/dev.yaml` and `helm-values/prod.yaml`. These override the per-service defaults with environment-appropriate settings (replicas, resources, namespaces, HPA settings).
+Create per-cluster values files at `helm-values/linkerd.yaml`, `helm-values/istio.yaml`, and `helm-values/cilium.yaml`. These set the correct namespace, mesh-specific pod annotations/labels, and any replica or resource differences for each service mesh cluster.
 
 **Technical Spec:** [Helm Charts](./technical-spec.md#helm-charts), [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays)
 
 **Acceptance Criteria:**
-- [ ] `helm-values/dev.yaml` — 1 replica per service, smaller resource limits, namespace petclinic-dev, HPA disabled
-- [ ] `helm-values/prod.yaml` — 2+ replicas for domain services, larger resources, namespace petclinic-prod, HPA enabled
-- [ ] Prod values include PDB settings (minAvailable=1)
-- [ ] Prod values include HPA settings (min/max replicas, target CPU)
-- [ ] Values are merged with per-service values when deploying: `helm install -f helm-values/{service}.yaml -f helm-values/{env}.yaml`
-- [ ] `helm template` with combined values files renders correct manifests
+- [ ] `helm-values/linkerd.yaml` — namespace: petclinic-linkerd, `podAnnotations.linkerd.io/inject: enabled`, 1 replica
+- [ ] `helm-values/istio.yaml` — namespace: petclinic-istio, no sidecar annotations (ambient mode uses namespace label), 1 replica
+- [ ] `helm-values/cilium.yaml` — namespace: petclinic-cilium, no mesh annotations required, 1 replica
+- [ ] Values merged with per-service values when deploying: `helm install -f helm-values/{service}.yaml -f helm-values/{mesh}.yaml`
+- [ ] `helm template` with combined values files renders correct manifests for all three meshes
 
 ---
 
@@ -2777,11 +2768,12 @@ Validate that Helm template rendering produces correct, deployable Kubernetes ma
 
 **Acceptance Criteria:**
 - [ ] `helm lint helm/petclinic-service/` passes
-- [ ] `helm template` renders valid YAML for each of the 8 services with dev values
-- [ ] `helm template` renders valid YAML for each of the 8 services with prod values
+- [ ] `helm template` renders valid YAML for each of the 8 services with linkerd values
+- [ ] `helm template` renders valid YAML for each of the 8 services with istio values
+- [ ] `helm template` renders valid YAML for each of the 8 services with cilium values
 - [ ] `kubectl apply --dry-run=client` passes on all rendered templates
-- [ ] Rendered output matches expected: correct ports, env vars, secrets, probes, replicas
-- [ ] Script created at `scripts/validate-helm.sh` to automate this validation for all services and environments
+- [ ] Rendered output matches expected: correct ports, env vars, secrets, probes, replicas, mesh annotations
+- [ ] Script created at `scripts/validate-helm.sh` to automate this validation for all services and mesh environments
 
 ---
 
@@ -2846,54 +2838,55 @@ Install ArgoCD on the EKS cluster in a dedicated `argocd` namespace. Include the
 
 ---
 
-### PETPLAT-113: Create ArgoCD Application CRDs for dev environment
+### PETPLAT-113: Create ArgoCD Application CRDs for linkerd cluster
 
 **Type:** Story
 **Priority:** P0
 **Epic:** E-17 GitOps with ArgoCD
 **Story Points:** 5
-**Labels:** k8s, argocd, gitops, dev
+**Labels:** k8s, argocd, gitops, linkerd
 **Blocked by:** PETPLAT-112, PETPLAT-107, PETPLAT-108, PETPLAT-109
 
 **Description:**
-Create ArgoCD Application CRDs for all 8 Petclinic services in the dev environment. Dev applications use auto-sync policy so that any change to Helm values files in Git triggers automatic deployment.
+Create ArgoCD Application CRDs for all 8 Petclinic services targeting the `petclinic-linkerd` cluster. Auto-sync enabled — any Helm values change in Git triggers automatic deployment.
 
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd), [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] ArgoCD Application manifests at `k8s/argocd/applications/dev/` (one per service)
+- [ ] ArgoCD Application manifests at `k8s/argocd/applications/linkerd/` (one per service)
 - [ ] Each Application points to the Helm chart at `helm/petclinic-service/`
-- [ ] Each Application uses values files: `helm-values/{service}.yaml` + `helm-values/dev.yaml`
+- [ ] Each Application uses values files: `helm-values/{service}.yaml` + `helm-values/linkerd.yaml`
 - [ ] Sync policy: `automated` with `selfHeal: true` and `prune: true`
-- [ ] Destination namespace: `petclinic-dev`
+- [ ] Destination server: `petclinic-linkerd` EKS cluster API endpoint
+- [ ] Destination namespace: `petclinic-linkerd`
 - [ ] Source repo: petclinic-platform Git URL
 - [ ] All 8 applications visible and synced in ArgoCD UI
-- [ ] Verified: push a tag change → ArgoCD auto-syncs → new image deployed
+- [ ] Verified: push a tag change → ArgoCD auto-syncs → new image deployed to linkerd cluster
 
 ---
 
-### PETPLAT-114: Create ArgoCD Application CRDs for prod environment
+### PETPLAT-114: Create ArgoCD Application CRDs for istio and cilium clusters
 
 **Type:** Story
 **Priority:** P0
 **Epic:** E-17 GitOps with ArgoCD
 **Story Points:** 5
-**Labels:** k8s, argocd, gitops, prod
-**Blocked by:** PETPLAT-112, PETPLAT-107, PETPLAT-108, PETPLAT-109
+**Labels:** k8s, argocd, gitops, istio, cilium
+**Blocked by:** PETPLAT-113
 
 **Description:**
-Create ArgoCD Application CRDs for all 8 Petclinic services in the prod environment. Prod applications use manual sync policy requiring explicit approval in ArgoCD UI or CLI before deploying.
+Create ArgoCD Application CRDs for the istio and cilium clusters, following the same pattern as PETPLAT-113. Each cluster is registered as a separate ArgoCD destination cluster. This completes the three-cluster GitOps setup.
 
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd), [Helm Charts](./technical-spec.md#helm-charts)
 
 **Acceptance Criteria:**
-- [ ] ArgoCD Application manifests at `k8s/argocd/applications/prod/` (one per service)
-- [ ] Each Application points to the Helm chart at `helm/petclinic-service/`
-- [ ] Each Application uses values files: `helm-values/{service}.yaml` + `helm-values/prod.yaml`
-- [ ] Sync policy: `manual` (no automated sync — requires explicit `argocd app sync` or UI click)
-- [ ] Destination namespace: `petclinic-prod`
-- [ ] All 8 applications visible in ArgoCD UI as `OutOfSync` until manually synced
-- [ ] Verified: manual sync deploys correctly to prod
+- [ ] ArgoCD Application manifests at `k8s/argocd/applications/istio/` (one per service)
+- [ ] ArgoCD Application manifests at `k8s/argocd/applications/cilium/` (one per service)
+- [ ] Istio apps: values `helm-values/{service}.yaml` + `helm-values/istio.yaml`, namespace `petclinic-istio`
+- [ ] Cilium apps: values `helm-values/{service}.yaml` + `helm-values/cilium.yaml`, namespace `petclinic-cilium`
+- [ ] Sync policy: `automated` with `selfHeal: true` and `prune: true` on all
+- [ ] All three clusters registered in ArgoCD (`argocd cluster add`)
+- [ ] 24 total Application CRDs (8 services × 3 clusters), all visible and healthy in ArgoCD UI
 
 ---
 
@@ -2914,8 +2907,8 @@ Configure ArgoCD RBAC policies, user access, and security settings. Restrict who
 **Acceptance Criteria:**
 - [ ] ArgoCD RBAC configured via argocd-rbac-cm ConfigMap
 - [ ] Admin role can manage all applications and settings
-- [ ] Developer role can view all applications but only sync dev environment
-- [ ] Prod sync restricted to admin role (additional safety for manual sync)
+- [ ] Developer role can view all applications and sync any cluster (all are auto-sync lab clusters)
+- [ ] Admin role has full management access including ArgoCD settings and cluster registration
 - [ ] Default admin password changed from initial auto-generated value
 - [ ] SSO integration documented as optional future enhancement
 - [ ] RBAC configuration stored at `k8s/argocd/argocd-rbac-cm.yaml`
@@ -2932,17 +2925,17 @@ Configure ArgoCD RBAC policies, user access, and security settings. Restrict who
 **Blocked by:** PETPLAT-113, PETPLAT-114, PETPLAT-50
 
 **Description:**
-Test the complete GitOps loop: CI builds and pushes image → CI updates image tag in Helm values file → ArgoCD detects change → ArgoCD deploys new version. Verify for both dev (auto-sync) and prod (manual sync).
+Test the complete GitOps loop: CI builds and pushes image → CI updates image tag in shared Helm values → ArgoCD detects change → ArgoCD deploys new version to all three clusters. All clusters use auto-sync.
 
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd), [CI/CD Pipeline](./technical-spec.md#cicd-pipeline)
 
 **Acceptance Criteria:**
-- [ ] Dev loop tested: push code → CI builds → CI updates dev values → ArgoCD auto-syncs → new version running
-- [ ] Prod loop tested: CI updates prod values → ArgoCD shows OutOfSync → manual sync → new version running
-- [ ] Rollback tested: revert image tag in Git → ArgoCD syncs previous version
-- [ ] ArgoCD health checks pass for all services after sync
-- [ ] Sync history visible in ArgoCD UI showing deployment timeline
-- [ ] Time from commit to running pod documented (target: < 10 min for dev)
+- [ ] GitOps loop tested on linkerd cluster: push code → CI builds → CI updates values → ArgoCD auto-syncs → new version running
+- [ ] Verified the same image SHA propagates to istio and cilium clusters automatically
+- [ ] Rollback tested: revert image tag in Git → ArgoCD syncs previous version on all three clusters
+- [ ] ArgoCD health checks pass for all services (24 apps) after sync
+- [ ] Sync history visible in ArgoCD UI per cluster
+- [ ] Time from commit to running pod documented (target: < 10 min per cluster)
 
 ---
 
