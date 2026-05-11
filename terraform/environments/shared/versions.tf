@@ -10,7 +10,7 @@ terraform {
 
   backend "s3" {
     # Bucket must be pre-created by scripts/bootstrap-state.sh
-    bucket       = "petclinic-terraform-state"
+    bucket       = "petclinic-terraform-state-bkr"
     key          = "petclinic/shared/terraform.tfstate"
     region       = "eu-central-1"
     use_lockfile = true

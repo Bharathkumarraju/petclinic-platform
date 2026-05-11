@@ -13,7 +13,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "petclinic-terraform-state"
+    bucket       = "petclinic-terraform-state-bkr"
     key          = "petclinic/cilium/terraform.tfstate"
     region       = "eu-central-1"
     use_lockfile = true

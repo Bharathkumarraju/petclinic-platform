@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "state_bucket" {
   description = "S3 bucket name for Terraform remote state"
   type        = string
-  default     = "petclinic-terraform-state"
+  default     = "petclinic-terraform-state-bkr"
 }
 
 variable "kubernetes_version" {
