@@ -231,6 +231,12 @@ Create the Terraform directory structure in petclinic-platform with separate env
 - [ ] `terraform/environments/cilium/` — EKS root module for Cilium cluster (same files)
 - [ ] `terraform/modules/vpc/` with main.tf, variables.tf, outputs.tf, versions.tf
 - [ ] `terraform/modules/eks/` with main.tf, variables.tf, outputs.tf, versions.tf
+- [ ] `terraform/modules/ecr/` with main.tf, variables.tf, outputs.tf, versions.tf
+- [ ] `terraform/modules/rds/` with main.tf, variables.tf, outputs.tf, versions.tf
+- [ ] `terraform/modules/dns/` with main.tf, variables.tf, outputs.tf, versions.tf
+- [ ] `terraform/modules/secrets/` with main.tf, variables.tf, outputs.tf, versions.tf
+- [ ] `terraform/modules/observability/` with main.tf, variables.tf, outputs.tf, versions.tf
+- [ ] `terraform/modules/karpenter/` with main.tf, variables.tf, outputs.tf, versions.tf
 - [ ] .gitignore includes .terraform/, *.tfstate, *.tfstate.backup, *.tfvars (sensitive), plan.out, .env, *.pem, *.key, IDE files, OS files
 - [ ] .terraform.lock.hcl is NOT in .gitignore (must be committed for reproducible builds)
 
@@ -245,18 +251,20 @@ Create the Terraform directory structure in petclinic-platform with separate env
 **Labels:** terraform, foundation, aws
 
 **Description:**
-Create a bootstrap script that provisions the S3 bucket (versioning enabled, encryption enabled) and DynamoDB table (LockID partition key) used for Terraform remote state. This is a one-time setup done outside Terraform itself.
+Create a bootstrap script that provisions the S3 bucket used for Terraform remote state. Uses S3 native locking (`use_lockfile = true`, Terraform ≥ 1.10.0) — no DynamoDB table required. This is a one-time setup done outside Terraform itself.
 
 **Technical Spec:** [Terraform State Backend](./technical-spec.md#terraform-state-backend)
 
 **Acceptance Criteria:**
 - [ ] `scripts/bootstrap-state.sh` script created
+- [ ] S3 bucket name: `petclinic-terraform-state-bkr` (accepts `--bucket` override)
 - [ ] S3 bucket created with versioning enabled
-- [ ] S3 bucket has server-side encryption (AES256 or KMS)
+- [ ] S3 bucket has server-side encryption (AES256)
 - [ ] S3 bucket has public access blocked (all 4 settings)
-- [ ] DynamoDB table created with `LockID` as partition key (String)
+- [ ] **No DynamoDB table** — S3 native locking is used (`use_lockfile = true` in backend config)
 - [ ] Script is idempotent (safe to run multiple times)
-- [ ] Script accepts region as parameter (default: eu-central-1)
+- [ ] Script accepts `--region` and `--bucket` parameters (defaults: eu-central-1, petclinic-terraform-state-bkr)
+- [ ] Script prints next steps: `terraform init` in each of the 4 environment directories
 
 ---
 
@@ -321,12 +329,14 @@ Set up provider configuration and version constraints in all four environment ro
 **Technical Spec:** [General Project Parameters](./technical-spec.md#general-project-parameters)
 
 **Acceptance Criteria:**
-- [ ] `versions.tf` in shared/, linkerd/, istio/, cilium/ with required_version >= 1.6.0
-- [ ] AWS provider source and version constraint (~> 5.0) defined in each
-- [ ] AWS provider configured with `var.aws_region` (default: eu-central-1)
-- [ ] `variables.tf` defines `aws_region` (default: eu-central-1) and `kubernetes_version` (default: 1.31)
-- [ ] `variables.tf` in cluster envs defines `state_bucket` (default: `petclinic-terraform-state`) for remote state reference
-- [ ] Common tags defined: `Project=petclinic`, `ManagedBy=terraform`, `ServiceMesh={linkerd|istio-ambient|cilium}` (cluster envs)
+- [ ] `versions.tf` in shared/, linkerd/, istio/, cilium/ with `required_version >= 1.10.0`
+- [ ] AWS provider source and version constraint (`~> 5.0`) defined in each
+- [ ] AWS provider configured with `var.aws_region` (default: `eu-central-1`)
+- [ ] `default_tags` in provider: `Project=petclinic`, `Environment={env}`, `ManagedBy=terraform`
+- [ ] Cluster envs add `ServiceMesh` default tag: `linkerd`, `istio-ambient`, or `cilium`
+- [ ] `variables.tf` defines `aws_region` (default: `eu-central-1`) and `kubernetes_version` (default: `"1.31"`)
+- [ ] `variables.tf` in cluster envs defines `state_bucket` (default: `petclinic-terraform-state-bkr`)
+- [ ] Backend uses `use_lockfile = true` (no DynamoDB)
 - [ ] `terraform validate` passes in all four environments
 
 ---

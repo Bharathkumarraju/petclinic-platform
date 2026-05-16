@@ -8,7 +8,7 @@
 set -euo pipefail
 
 REGION="eu-central-1"
-BUCKET="petclinic-terraform-state"
+BUCKET="petclinic-terraform-state-bkr"
 
 while [[ $# -gt 0 ]]; do
   case $1 in
