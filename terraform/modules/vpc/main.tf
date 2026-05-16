@@ -42,3 +42,51 @@ resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
+
+# ── RDS Security Group ────────────────────────────────────────────────────
+# No ingress rules here — each cluster environment adds its own rule:
+#   aws_security_group_rule allowing TCP 3306 from its node SG.
+# This avoids a chicken-and-egg dependency: shared VPC is deployed before
+# the three EKS cluster environments exist.
+
+resource "aws_security_group" "rds" {
+  name        = "${var.name}-rds-sg"
+  description = "RDS MySQL — ingress rules added per-cluster via aws_security_group_rule"
+  vpc_id      = aws_vpc.this.id
+
+  tags = merge(var.tags, { Name = "${var.name}-rds-sg" })
+}
+
+# ── ALB Security Group ────────────────────────────────────────────────────
+
+resource "aws_security_group" "alb" {
+  name        = "${var.name}-alb-sg"
+  description = "Internet-facing ALB — HTTP and HTTPS from anywhere"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = "HTTP from internet"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS from internet"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "All outbound (ALB targets pods via IP mode)"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(var.tags, { Name = "${var.name}-alb-sg" })
+}

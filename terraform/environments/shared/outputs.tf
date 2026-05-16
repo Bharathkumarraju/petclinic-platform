@@ -12,3 +12,13 @@ output "vpc_cidr" {
   description = "VPC CIDR block"
   value       = module.vpc.vpc_cidr
 }
+
+output "rds_sg_id" {
+  description = "Shared RDS security group ID — cluster environments add their node SG ingress rule here"
+  value       = module.vpc.rds_sg_id
+}
+
+output "alb_sg_id" {
+  description = "Shared ALB security group ID"
+  value       = module.vpc.alb_sg_id
+}
