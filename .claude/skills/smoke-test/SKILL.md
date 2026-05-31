@@ -1,40 +1,41 @@
 ---
 name: smoke-test
-description: Run health checks against deployed services
+description: Run health checks against deployed services in a mesh cluster
 disable-model-invocation: true
-argument-hint: "[env]"
+argument-hint: "[mesh]"
 ---
 
-# /smoke-test [env]
+# /smoke-test [mesh]
 
 Run smoke tests against deployed services to verify they are healthy.
 
 ## Arguments
 
-- `env` — Target environment: `dev` or `prod` (default: `dev`)
+- `mesh` — Target cluster: `linkerd`, `istio`, or `cilium` (default: `linkerd`)
 
 ## Steps
 
-1. Set the namespace based on environment:
-   - `dev` → `petclinic-dev`
-   - `prod` → `petclinic-prod`
+1. Set the namespace based on mesh:
+   - `linkerd` → `petclinic-linkerd`
+   - `istio`   → `petclinic-istio`
+   - `cilium`  → `petclinic-cilium`
 
 2. Check if `scripts/smoke-test.sh` exists. If so, run it:
    ```bash
-   bash scripts/smoke-test.sh {env}
+   bash scripts/smoke-test.sh {mesh}
    ```
 
 3. If the script doesn't exist, run manual health checks:
 
    a. Check all pods are running:
       ```bash
-      kubectl get pods -n petclinic-{env} --no-headers | grep -v Running
+      kubectl get pods -n petclinic-{mesh} --no-headers | grep -v Running
       ```
       If any pods are not Running, report them.
 
    b. For each service, port-forward and check health endpoint:
       ```bash
-      kubectl port-forward svc/{service} {local-port}:{service-port} -n petclinic-{env} &
+      kubectl port-forward svc/{service} {local-port}:{service-port} -n petclinic-{mesh} &
       PF_PID=$!
       sleep 3
       curl -sf http://localhost:{local-port}/actuator/health || echo "FAIL: {service}"
@@ -55,7 +56,7 @@ Run smoke tests against deployed services to verify they are healthy.
 
 4. Present results:
    ```
-   ## Smoke Test Results: {env}
+   ## Smoke Test Results: {mesh}
 
    | Service | Pod Status | Health Check | Notes |
    |---------|-----------|-------------|-------|
@@ -75,4 +76,4 @@ Run smoke tests against deployed services to verify they are healthy.
 
 - This is a read-only verification — it does not deploy or modify anything
 - Port-forwarding is temporary and cleaned up after each check
-- For prod, consider using the ingress endpoint instead of port-forwarding
+- To compare mesh behavior, run against all three clusters: `/smoke-test linkerd`, `/smoke-test istio`, `/smoke-test cilium`

@@ -20,7 +20,7 @@ Environment root modules (`terraform/environments/{env}/`) additionally have:
 
 ## Naming Conventions
 
-- Resource names: `petclinic-{env}-{resource}` (e.g., `petclinic-dev-vpc`)
+- Resource names: `petclinic-{env}-{resource}` (e.g., `petclinic-linkerd-eks`, `petclinic-shared-mysql`)
 - Terraform resource identifiers: snake_case (e.g., `aws_vpc.main`, `aws_subnet.private`)
 - Variable names: snake_case, descriptive (e.g., `vpc_cidr_block`, `eks_node_instance_type`)
 - Output names: snake_case, prefixed by resource type (e.g., `vpc_id`, `eks_cluster_endpoint`)
@@ -40,7 +40,7 @@ tags = {
 ## Variable Conventions
 
 - Always include `description` and `type`
-- Use `validation` blocks for constrained values (e.g., environment must be "dev" or "prod")
+- Use `validation` blocks for constrained values (e.g., environment must be "shared", "linkerd", "istio", or "cilium")
 - Use `sensitive = true` for any secret values
 - Provide sensible `default` values where appropriate
 
@@ -55,10 +55,11 @@ tags = {
 
 ## State Management
 
-- Backend: S3 bucket with versioning + DynamoDB for locking
-- State key pattern: `petclinic/{env}/terraform.tfstate`
-- Never store state locally in production
-- Use `terraform_remote_state` data source for cross-module references
+- Backend: S3 bucket with native locking (`use_lockfile = true`) — **no DynamoDB table**
+- Bucket: `petclinic-terraform-state-bkr`, region: `eu-central-1`
+- State key pattern: `petclinic/{env}/terraform.tfstate` (env: `shared`, `linkerd`, `istio`, `cilium`)
+- Never store state locally
+- Use `terraform_remote_state` data source for cross-environment references (clusters read VPC from `shared`)
 
 ## Workflow
 

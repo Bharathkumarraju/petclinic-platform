@@ -45,10 +45,10 @@ NEVER run `kubectl apply`, `kubectl delete`, or any mutating command.
 - [ ] Actuator health endpoints used for probes (not generic TCP checks)
 
 ### Structure
-- [ ] Base manifests are environment-agnostic
-- [ ] Dev overlay: 1 replica, smaller resources
-- [ ] Prod overlay: 2+ replicas, HPA defined, full resource limits
-- [ ] Kustomization.yaml present in overlay directories
+- [ ] Base manifests in `k8s/base/` are cluster-agnostic
+- [ ] ArgoCD Application CRDs exist for all 3 clusters: `k8s/argocd/applications/{linkerd,istio,cilium}/`
+- [ ] Per-mesh Helm values in `helm-values/{linkerd,istio,cilium}.yaml`
+- [ ] Namespace is explicitly set per cluster: `petclinic-linkerd`, `petclinic-istio`, `petclinic-cilium`
 
 ## Output Format
 

@@ -26,7 +26,7 @@ Review documentation in `docs/` for quality, completeness, and correctness. Cros
 ### 2. Accuracy
 - [ ] File paths referenced actually exist in the repo
 - [ ] Terraform module names match `terraform/modules/` directory
-- [ ] K8s namespace names match conventions (petclinic-dev, petclinic-prod)
+- [ ] K8s namespace names match conventions (petclinic-linkerd, petclinic-istio, petclinic-cilium)
 - [ ] Service names match the 8 known services
 - [ ] Port numbers match application service ports
 - [ ] AWS resource names follow `petclinic-{env}-{resource}` pattern
@@ -36,14 +36,14 @@ Review documentation in `docs/` for quality, completeness, and correctness. Cros
 - [ ] Covers: deploy, rollback, scale up/down, restart service
 - [ ] Covers: RDS failover, secret rotation, certificate renewal
 - [ ] Each procedure has: When, Who, Steps, Verify, Rollback
-- [ ] Includes both dev and prod variants where they differ
+- [ ] Covers all three clusters (linkerd, istio, cilium) where steps differ by mesh
 
 ### 4. Completeness — Architecture Doc
 - [ ] Lists all 8 services and their relationships
 - [ ] Describes network topology (VPC, subnets, NAT, ALB)
 - [ ] Describes data flow (request path from user to DB)
 - [ ] Documents EKS cluster configuration
-- [ ] Documents RDS configuration (dev vs prod differences)
+- [ ] Documents RDS configuration (shared across all three clusters)
 
 ### 5. Completeness — Incident Playbook
 - [ ] Has escalation matrix (roles, not names)
@@ -94,7 +94,7 @@ Review documentation in `docs/` for quality, completeness, and correctness. Cros
 
 When reviewing, verify these against actual code:
 - Terraform module paths → `terraform/modules/` directory listing
-- K8s manifest paths → `k8s/base/` and `k8s/overlays/` directory listing
+- K8s manifest paths → `k8s/base/` and `k8s/argocd/applications/` directory listing
 - Service ports → Known: 8888, 8761, 8080, 8081, 8082, 8083, 8084, 9090
 - Environment variables → SPRING_PROFILES_ACTIVE, OPENAI_API_KEY
 - Script paths → `scripts/` directory listing

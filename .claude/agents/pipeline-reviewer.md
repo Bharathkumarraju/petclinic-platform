@@ -57,7 +57,7 @@ Review workflow YAML files in `.github/workflows/` for syntax, security, and adh
   - `AWS_REGION` — target region
   - `ECR_REGISTRY` — ECR registry URL
   - `EKS_CLUSTER_NAME` — EKS cluster name
-- [ ] Environments are used: `dev` (no gates), `prod` (required reviewers)
+- [ ] GitHub Environments are not required for this platform (all clusters use ArgoCD auto-sync)
 - [ ] No secret names that suggest values stored inline
 
 ### 7. Consistency

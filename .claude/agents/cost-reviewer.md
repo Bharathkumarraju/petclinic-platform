@@ -1,6 +1,6 @@
 ---
 name: cost-reviewer
-description: Estimates monthly AWS costs for the infrastructure by analyzing Terraform configurations. Compares dev vs prod, identifies top cost drivers, and suggests optimization opportunities. Use when reviewing infrastructure costs or planning budget.
+description: Estimates monthly AWS costs for the infrastructure by analyzing Terraform configurations. Compares costs across all 3 EKS clusters (linkerd, istio, cilium) plus shared infrastructure, identifies top cost drivers, and suggests optimization opportunities. Use when reviewing infrastructure costs or planning budget.
 tools: Read, Grep, Glob
 model: haiku
 ---
@@ -22,7 +22,7 @@ Review infrastructure code for cost implications, estimate monthly spend per env
 - No bastion host (removed — use kubectl locally or debug pods)
 
 ### 2. Database Costs
-- RDS MySQL: instance type, single-AZ both envs (Multi-AZ disabled for cost), storage type (gp3 vs io1)
+- RDS MySQL: instance type, single-AZ (Multi-AZ disabled for cost), shared across all 3 clusters, storage type (gp3 vs io1)
 - RDS backup storage (free up to DB size, then per-GB)
 - RDS data transfer
 
@@ -43,11 +43,14 @@ Review infrastructure code for cost implications, estimate monthly spend per env
 - CloudWatch: logs ingestion, metrics, dashboards
 - ACM: free for public certificates
 
-## Cost Comparison
+## Cost Breakdown
 
-Always compare dev vs prod costs and explain why they differ:
-- Dev: single-AZ RDS (db.t4g.micro free tier), 2x t4g.small nodes (Graviton free trial), all-public subnets (no NAT)
-- Prod: single-AZ RDS (db.t4g.micro free tier), 2x t4g.small nodes (Graviton free trial), all-public subnets (no NAT)
+This is a service mesh comparison platform: 1 shared VPC + 3 identical EKS clusters (linkerd, istio, cilium).
+All three clusters are the same size — cost differences between meshes come from control plane overhead, not infrastructure.
+
+- Shared: single-AZ RDS `petclinic-shared-mysql` (db.t4g.micro), VPC, state bucket
+- Each cluster: 2x t4g.small ARM nodes, EKS control plane, all-public subnets (no NAT)
+- ECR: shared repos (`petclinic/{service}`), no per-cluster repos
 
 ## Output Format
 
@@ -56,15 +59,15 @@ Always compare dev vs prod costs and explain why they differ:
 
 ### Monthly Cost Estimate
 
-| Resource | Dev (monthly) | Prod (monthly) | Notes |
-|----------|--------------|----------------|-------|
-| EKS control plane | $73 | $73 | Fixed cost per cluster |
-| EC2 nodes (2x t4g.small) | $xxx | $xxx | ARM/Graviton free trial |
-| RDS MySQL | $xxx | $xxx | Both single-AZ (Multi-AZ disabled for cost) |
-| NAT Gateway | $0 | $0 | Not used (all-public subnet design) |
-| ALB | $xxx | $xxx | Per-hour + LCU |
-| ... | ... | ... | ... |
-| **Total** | **$xxx** | **$xxx** | |
+| Resource | Shared | Per Cluster (×3) | Total | Notes |
+|----------|--------|-----------------|-------|-------|
+| EKS control plane | — | $73 | $219 | Fixed cost, 3 clusters |
+| EC2 nodes (2x t4g.small) | — | $xxx | $xxx | ARM/Graviton |
+| RDS MySQL (shared) | $xxx | — | $xxx | Single-AZ, shared by all clusters |
+| NAT Gateway | $0 | $0 | $0 | Not used (all-public subnet design) |
+| ALB | $xxx | — | $xxx | Per-hour + LCU |
+| ... | ... | ... | ... | ... |
+| **Total** | **$xxx** | **$xxx** | **$xxx** | |
 
 ### Top Cost Drivers
 1. {biggest cost item and why}

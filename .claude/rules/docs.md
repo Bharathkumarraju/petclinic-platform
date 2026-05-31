@@ -31,7 +31,7 @@ docs/
    - Purpose (1-2 sentences)
    - Table of Contents (for docs > 3 sections)
 4. **Code blocks:** Every command must be copy-pasteable. Include the full command, not fragments.
-5. **Environment awareness:** Always specify which env (dev/prod) or use `{env}` placeholder.
+5. **Environment awareness:** Always specify which environment (`shared`, `linkerd`, `istio`, or `cilium`) or which mesh cluster (`linkerd`, `istio`, `cilium`) where applicable. Use `{mesh}` as a placeholder for mesh-specific steps.
 
 ## Runbook Format
 
