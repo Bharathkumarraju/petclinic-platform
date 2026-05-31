@@ -7,14 +7,26 @@
     "allow": [
       "Bash(git init *)",
       "Bash(git checkout *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(git -C /Users/bharathkumardasaraju/1dot618labs-bharath/spring-petclinic/petclinic-platform diff --stat)",
+      "Bash(git -C /Users/bharathkumardasaraju/1dot618labs-bharath/spring-petclinic/petclinic-platform status)",
+      "Bash(git *)",
+      "Bash(uvx hashicorp-terraform-mcp-server *)",
+      "Bash(docker run *)",
+      "Bash(terraform validate *)",
+      "Bash(terraform init *)",
+      "Bash(terraform fmt *)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "awslabs.terraform-mcp-server",
     "aws-knowledge-mcp",
     "awslabs.aws-pricing-mcp-server",
     "context7",
-    "atlassian"
+    "atlassian",
+    "hashicorp.terraform-mcp-server"
   ]
 }
