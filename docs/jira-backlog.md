@@ -161,19 +161,18 @@ Create file-pattern rules (`.claude/rules/`), review subagents (`.claude/agents/
 - `/terraform-plan [env]` — init + plan (manual only)
 - `/terraform-apply [env]` — apply saved plan with confirmation (manual only)
 - `/security-scan [module|all]` — Checkov scan (manual only)
-- `/deploy-dev [service|all]` — deploy to dev namespace (manual only)
-- `/deploy-prod [service|all]` — deploy to prod with extra safety (manual only)
-- `/smoke-test [env]` — health check all services (manual only)
-- `/logs [service] [env]` — fetch and filter pod logs (manual only)
-- `/rollback [service] [env]` — rollback deployment (manual only)
+- `/deploy [mesh] [service|all]` — deploy to a mesh cluster (linkerd|istio|cilium) (manual only)
+- `/smoke-test [mesh]` — health check all services in a mesh cluster (manual only)
+- `/logs [service] [mesh]` — fetch and filter pod logs for a mesh cluster (manual only)
+- `/rollback [service] [mesh]` — rollback deployment in a mesh cluster (manual only)
 - `/review-terraform [path]` — review against checklist (auto-invocable)
 
 **Acceptance Criteria:**
 - [ ] 4 rule files with `paths:` frontmatter for selective loading (terraform, kubernetes, pipelines, docs)
 - [ ] 6 agent files — read-only tools only, structured output format
-- [ ] 9 skill directories with SKILL.md — 8 manual (`disable-model-invocation: true`), 1 auto-invocable
-- [ ] All skills accept arguments (environment or service name)
-- [ ] Deploy-prod has extra confirmation step vs deploy-dev
+- [ ] 8 skill directories with SKILL.md — 7 manual (`disable-model-invocation: true`), 1 auto-invocable
+- [ ] All skills accept arguments (mesh cluster or service name)
+- [ ] `/deploy` skill accepts mesh argument: `linkerd`, `istio`, or `cilium`
 - [ ] Agents report findings in structured format with file:line references
 
 ---
@@ -242,7 +241,7 @@ Create the Terraform directory structure in petclinic-platform with separate env
 
 ---
 
-### PETPLAT-2: Create S3 bucket and DynamoDB table for Terraform state
+### PETPLAT-2: Create S3 bucket for Terraform state
 
 **Type:** Task
 **Priority:** P0
@@ -284,7 +283,7 @@ Configure the S3 backend in `terraform/environments/shared/versions.tf` (or `bac
 
 **Acceptance Criteria:**
 - [ ] Backend configured with S3 backend, state key: `petclinic/shared/terraform.tfstate`
-- [ ] DynamoDB table referenced for locking
+- [ ] S3 native locking enabled (`use_lockfile = true`) — no DynamoDB table
 - [ ] Encryption enabled, region eu-central-1
 - [ ] `terraform init` succeeds in `terraform/environments/shared/`
 - [ ] Outputs (vpc_id, public_subnet_ids) are non-sensitive so remote state consumers can read them
@@ -692,9 +691,9 @@ Create the ECR module in `terraform/modules/ecr/` that provisions one ECR privat
 - [ ] Module in `terraform/modules/ecr/`
 - [ ] Uses `aws_ecr_repository` resource
 - [ ] Accepts `service_names` list variable and `environment` variable
-- [ ] Creates one ECR repo per service name under `petclinic-{env}/` namespace
+- [ ] Creates one ECR repo per service name under `petclinic/` namespace (shared, no env prefix)
 - [ ] Scan-on-push enabled (`image_scanning_configuration`)
-- [ ] Tag mutability configurable (MUTABLE for dev, IMMUTABLE for prod)
+- [ ] Tag mutability: `MUTABLE` (all clusters are lab/comparison — no immutability needed)
 - [ ] Lifecycle policy: keep last 10 images, expire untagged after 7 days
 - [ ] Outputs: map of service_name → repository_url, map of service_name → repository_arn
 - [ ] `terraform validate` passes
@@ -718,7 +717,7 @@ Configure ECR lifecycle policies to automatically clean up old images and manage
 **Acceptance Criteria:**
 - [ ] Lifecycle policy JSON: keep last 10 tagged images, expire untagged after 7 days
 - [ ] `aws_ecr_lifecycle_policy` resource attached to each repository
-- [ ] Tag immutability: `MUTABLE` for dev, `IMMUTABLE` for prod (variable-driven)
+- [ ] Tag immutability: `MUTABLE` for all repos (comparison platform — no prod environment)
 - [ ] Lifecycle policy tested: verify old images are pruned after threshold
 - [ ] `terraform validate` passes
 
@@ -802,8 +801,8 @@ Create the RDS module in `terraform/modules/rds/` for a MySQL instance.
 - [ ] Multi-AZ configurable (false for both envs — cost optimization; teach students when to enable)
 - [ ] Instance class configurable (default: db.t4g.micro — free tier, ARM/Graviton)
 - [ ] Allocated storage configurable (default: 20 GB, autoscaling enabled)
-- [ ] Backup retention: 7 days (dev), 30 days (prod) — configurable
-- [ ] Skip final snapshot configurable (true for dev, false for prod)
+- [ ] Backup retention configurable (default: 7 days — single shared instance, comparison platform)
+- [ ] Skip final snapshot configurable (default: false — protect the shared data)
 - [ ] DB parameter group with character set utf8mb4
 - [ ] Master username and password sourced from variables (will come from Secrets Manager)
 - [ ] Outputs: endpoint, port, db_instance_id
@@ -1019,22 +1018,22 @@ Create a Route 53 A record (alias) pointing the domain to the ALB created by the
 
 ---
 
-### PETPLAT-32: Wire DNS module into dev environment
+### PETPLAT-32: Wire DNS module into linkerd, istio, and cilium environments
 
 **Type:** Task
 **Priority:** P1
 **Epic:** E-6 DNS & Ingress
-**Story Points:** 1
+**Story Points:** 3
 **Labels:** terraform, dns
 **Blocked by:** PETPLAT-28
 
 **Description:**
-Call the DNS module from the dev environment.
+Call the DNS module from each of the three cluster environments (linkerd, istio, cilium). Each cluster gets its own subdomain pointing to its ALB.
 
 **Technical Spec:** [DNS and Ingress](./technical-spec.md#dns-and-ingress)
 
 **Acceptance Criteria:**
-- [ ] DNS module called in dev main.tf
+- [ ] DNS module called in each cluster's main.tf (linkerd, istio, cilium)
 - [ ] Domain configured
 - [ ] ACM certificate created and validated
 - [ ] `terraform plan` shows expected resources
@@ -1401,7 +1400,7 @@ _Superseded by the service-mesh comparison architecture. There is no prod enviro
 **Blocked by:** PETPLAT-45, PETPLAT-72
 
 **Description:**
-Add HPA resources in prod overlay for stateless services.
+Add HPA resources for stateless services in all mesh clusters (linkerd, istio, cilium).
 
 **Technical Spec:** [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays)
 
@@ -1414,7 +1413,7 @@ Add HPA resources in prod overlay for stateless services.
 
 ---
 
-### PETPLAT-48: Deploy all services to dev namespace and verify
+### PETPLAT-48: Deploy all services to each mesh cluster namespace and verify
 
 **Type:** Story
 **Priority:** P0
@@ -1424,7 +1423,7 @@ Add HPA resources in prod overlay for stateless services.
 **Blocked by:** PETPLAT-45, PETPLAT-16, PETPLAT-24, PETPLAT-26, PETPLAT-35, PETPLAT-36, PETPLAT-85
 
 **Description:**
-Deploy all 8 services to dev namespace and verify the full application is working. Images must already exist in ECR (PETPLAT-85). Initial deployment can use `helm install` directly or ArgoCD sync (E-17). Subsequent deployments are handled by ArgoCD.
+Deploy all 8 services to each mesh cluster namespace (petclinic-linkerd, petclinic-istio, petclinic-cilium) and verify the full application is working. Images must already exist in ECR (PETPLAT-85). Initial deployment can use `helm install` directly or ArgoCD sync (E-17). Subsequent deployments are handled by ArgoCD.
 
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays), [Helm Charts](./technical-spec.md#helm-charts)
 
@@ -1508,7 +1507,7 @@ Create GitHub Actions workflow in the platform repo that updates image tags in H
 
 ### ~~PETPLAT-51: REMOVED — deploy-to-prod pipeline replaced by ArgoCD~~
 
-_Prod deployment is now handled by ArgoCD (E-17) with manual sync policy. No separate deploy-prod workflow needed. ArgoCD Application CRD for prod is configured with `syncPolicy: manual` requiring explicit approval in ArgoCD UI. See PETPLAT-109._
+_Deployment to all mesh clusters is handled by ArgoCD (E-17) with auto-sync. No separate deploy workflow needed. ArgoCD Application CRDs for all three clusters use `syncPolicy: automated`. See PETPLAT-109._
 
 ---
 
@@ -1698,8 +1697,8 @@ Deploy Loki for log aggregation and FluentBit as a DaemonSet to collect and forw
 **Technical Spec:** [Observability](./technical-spec.md#observability)
 
 **Acceptance Criteria:**
-- [ ] Loki deployed to monitoring namespace with PersistentVolume (10Gi dev, 50Gi prod)
-- [ ] Loki log retention configured (7 days dev, 30 days prod)
+- [ ] Loki deployed to monitoring namespace with PersistentVolume (20Gi per cluster)
+- [ ] Loki log retention configured (7 days per cluster)
 - [ ] FluentBit DaemonSet deployed on all nodes
 - [ ] FluentBit output configured to `http://loki.monitoring:3100`
 - [ ] Logs from all 8 services visible in Grafana (Explore → Loki datasource)
@@ -1959,7 +1958,7 @@ Install Karpenter for node autoscaling on EKS. Karpenter provides faster, more f
 
 ---
 
-### PETPLAT-74: Configure Karpenter NodePool for spot instances in dev
+### PETPLAT-74: Configure Karpenter NodePool for spot instances
 
 **Type:** Story
 **Priority:** P2
@@ -1969,12 +1968,12 @@ Install Karpenter for node autoscaling on EKS. Karpenter provides faster, more f
 **Blocked by:** PETPLAT-73
 
 **Description:**
-Configure Karpenter NodePool for dev environment to use spot instances, saving 60-70% on compute. Karpenter's EC2NodeClass and NodePool CRDs make spot configuration declarative.
+Configure Karpenter NodePool for each mesh cluster to use spot instances, saving 60-70% on compute. Karpenter's EC2NodeClass and NodePool CRDs make spot configuration declarative.
 
 **Technical Spec:** [Karpenter Node Autoscaling](./technical-spec.md#karpenter-node-autoscaling), [Scaling and Cost](./technical-spec.md#scaling-and-cost)
 
 **Acceptance Criteria:**
-- [ ] NodePool CRD for dev with `spec.template.spec.requirements` including `karpenter.sh/capacity-type: ["spot", "on-demand"]`
+- [ ] NodePool CRD with `spec.template.spec.requirements` including `karpenter.sh/capacity-type: ["spot", "on-demand"]`
 - [ ] EC2NodeClass with multiple ARM instance families: t4g.small, t4g.medium (Graviton, for spot availability)
 - [ ] NodePool weight configured to prefer spot over on-demand
 - [ ] Consolidation policy enabled for cost optimization
@@ -2022,7 +2021,7 @@ Document the estimated monthly cost of the full stack.
 
 **Acceptance Criteria:**
 - [ ] Cost table in docs: EKS control plane, EC2 nodes, RDS, ALB, S3, data transfer (no NAT — intentional)
-- [ ] Dev vs prod cost comparison
+- [ ] Cost breakdown: shared environment + per-cluster (×3) + total
 - [ ] Cost optimization recommendations
 - [ ] Added to docs/architecture.md or separate docs/cost.md
 
@@ -2057,7 +2056,7 @@ Document the infrastructure architecture.
 - [ ] Service topology diagram (8 services and their connections)
 - [ ] Network diagram (VPC, subnets, routing, security groups)
 - [ ] Technology decisions and rationale
-- [ ] Environment differences (dev vs prod)
+- [ ] Service mesh comparison (linkerd vs istio vs cilium infrastructure differences)
 
 ---
 
@@ -2189,7 +2188,7 @@ Create a CLAUDE.md in petclinic-platform that gives Claude Code full context abo
 - [ ] Terraform conventions (module pattern, naming, state, tags)
 - [ ] K8s manifest conventions (labels, probes, resources, secrets)
 - [ ] Security rules (non-negotiable, 8 rules)
-- [ ] AWS environment details (dev vs prod table)
+- [ ] AWS environment details (shared + linkerd + istio + cilium table)
 - [ ] Application services table (8 services, ports, MySQL needs)
 - [ ] MCP servers documented
 - [ ] Does NOT duplicate workspace-level CLAUDE.md (app details)
@@ -2305,28 +2304,28 @@ Define and implement the mechanism for how the CI pipeline updates Helm values f
 - [ ] CI pipeline can update image tag in `helm-values/{service}.yaml` files
 - [ ] Image tag is the commit SHA (matches what was pushed to ECR)
 - [ ] CI commits and pushes the updated values files to Git
-- [ ] ArgoCD detects the commit and syncs (dev: auto-sync, prod: manual sync)
+- [ ] ArgoCD detects the commit and syncs (all three clusters: auto-sync)
 - [ ] No `kubectl apply` in CI pipeline — GitOps only
 - [ ] Tested: CI updates tag → ArgoCD deploys correct image
 
 ---
 
-### PETPLAT-88: Add Pod Disruption Budgets for prod
+### PETPLAT-88: Add Pod Disruption Budgets for all mesh clusters
 
 **Type:** Story
 **Priority:** P1
 **Epic:** E-9 K8s Overlays
 **Story Points:** 2
-**Labels:** k8s, prod, availability
+**Labels:** k8s, availability
 **Blocked by:** PETPLAT-46
 
 **Description:**
-Add PodDisruptionBudgets (PDBs) for prod to ensure minimum availability during node drains, rolling updates, and cluster upgrades.
+Add PodDisruptionBudgets (PDBs) for all mesh clusters to ensure minimum availability during node drains, rolling updates, and cluster upgrades.
 
 **Technical Spec:** [Kubernetes Overlays](./technical-spec.md#kubernetes-overlays)
 
 **Acceptance Criteria:**
-- [ ] PDB for each service in prod overlay
+- [ ] PDB for each service in per-mesh Helm values
 - [ ] Config Server: minAvailable=1
 - [ ] Discovery Server: minAvailable=1
 - [ ] API Gateway: minAvailable=1
@@ -2352,8 +2351,7 @@ Add ResourceQuotas and LimitRanges to petclinic namespaces to prevent runaway re
 
 **Acceptance Criteria:**
 - [ ] ResourceQuota per namespace: max CPU, max memory, max pods
-- [ ] Dev namespace: lower limits (e.g., 8 CPU, 16Gi memory, 30 pods)
-- [ ] Prod namespace: higher limits (e.g., 32 CPU, 64Gi memory, 80 pods)
+- [ ] Each mesh namespace: same limits (e.g., 8 CPU, 16Gi memory, 30 pods — all clusters are identical for fair comparison)
 - [ ] LimitRange: default requests and limits for containers that don't specify them
 - [ ] Verified: pod without resource requests gets default applied
 - [ ] `kubectl apply --dry-run=client` passes
@@ -2370,12 +2368,12 @@ Add ResourceQuotas and LimitRanges to petclinic namespaces to prevent runaway re
 **Blocked by:** PETPLAT-48, PETPLAT-78
 
 **Description:**
-Execute a full `terraform destroy` of the dev environment and rebuild from scratch to prove the IaC is complete and the stack can be recreated. Document any manual steps found.
+Execute a full `terraform destroy` of one cluster environment (e.g., linkerd) and rebuild from scratch to prove the IaC is complete and the stack can be recreated. Document any manual steps found.
 
 **Technical Spec:** [Terraform State Backend](./technical-spec.md#terraform-state-backend), [Terraform Modules](./technical-spec.md#terraform-modules)
 
 **Acceptance Criteria:**
-- [ ] `terraform destroy` completes for dev environment
+- [ ] `terraform destroy` completes for one cluster environment (e.g., linkerd)
 - [ ] All AWS resources confirmed deleted (no orphans)
 - [ ] `terraform apply` recreates the full stack
 - [ ] K8s manifests re-deployed
@@ -2403,7 +2401,7 @@ Document the EKS cluster upgrade strategy. EKS Kubernetes versions go end-of-lif
 **Acceptance Criteria:**
 - [ ] Upgrade strategy documented in docs/runbook.md or docs/adr/
 - [ ] Steps: check release notes → upgrade add-ons → upgrade control plane → upgrade node groups
-- [ ] Pre-upgrade checklist: check deprecation warnings, test in dev first, verify PDBs
+- [ ] Pre-upgrade checklist: check deprecation warnings, upgrade one cluster first, verify PDBs
 - [ ] Add-on compatibility matrix documented
 - [ ] Rollback plan: what to do if upgrade fails
 - [ ] Schedule: how often to check for new versions
@@ -2431,7 +2429,7 @@ Document Terraform state management procedures for common operational scenarios.
 - [ ] How to: remove a resource from state without destroying (`terraform state rm`)
 - [ ] How to: move a resource between modules (`terraform state mv`)
 - [ ] How to: recover from state corruption (S3 versioning rollback)
-- [ ] How to: handle state lock stuck (DynamoDB lock force-unlock)
+- [ ] How to: handle state lock stuck (S3 lock file removal — delete `.terraform.lock.hcl` state lock from S3)
 - [ ] Warning: when NOT to use these commands
 
 ---
@@ -2587,7 +2585,7 @@ Enable Pod Security Admission (PSA) at the namespace level and set SecurityConte
 **Blocked by:** PETPLAT-48
 
 **Description:**
-Create load test scripts and run baseline performance tests against the dev environment. Results feed into capacity planning.
+Create load test scripts and run baseline performance tests against each mesh cluster. Results feed into capacity planning and mesh performance comparison.
 
 **Technical Spec:** [Application Services](./technical-spec.md#application-services), [Scaling and Cost](./technical-spec.md#scaling-and-cost)
 
@@ -2772,7 +2770,7 @@ Create per-cluster values files at `helm-values/linkerd.yaml`, `helm-values/isti
 **Blocked by:** PETPLAT-108, PETPLAT-109
 
 **Description:**
-Validate that Helm template rendering produces correct, deployable Kubernetes manifests for all services across both environments. Run `helm template` and `kubectl apply --dry-run=client` on the output.
+Validate that Helm template rendering produces correct, deployable Kubernetes manifests for all services across all three mesh environments. Run `helm template` and `kubectl apply --dry-run=client` on the output.
 
 **Technical Spec:** [Helm Charts](./technical-spec.md#helm-charts)
 
@@ -2807,7 +2805,7 @@ Document the Helm chart structure, values file conventions, and how to add a new
 - [ ] How to: deploy a service manually with Helm
 - [ ] How to: add a new service (create values file, add ArgoCD Application)
 - [ ] How to: change resources, replicas, or environment variables
-- [ ] Values merge order documented: defaults < per-service < per-environment
+- [ ] Values merge order documented: defaults < per-service < per-mesh
 - [ ] Integration with ArgoCD documented (E-17)
 
 ---
@@ -2817,7 +2815,7 @@ Document the Helm chart structure, values file conventions, and how to add a new
 # EPIC E-17: GitOps with ArgoCD
 
 **Priority:** P0
-**Description:** Install ArgoCD on EKS and configure GitOps-based continuous delivery for all 8 Petclinic services. ArgoCD watches the Git repo for changes to Helm values files and automatically deploys to dev (auto-sync) or awaits manual approval for prod (manual sync). This replaces `kubectl apply` in CI/CD pipelines with a proper GitOps pattern.
+**Description:** Install ArgoCD on each EKS cluster and configure GitOps-based continuous delivery for all 8 Petclinic services. ArgoCD watches the Git repo for changes to Helm values files and automatically deploys to all three mesh clusters (auto-sync on all). This replaces `kubectl apply` in CI/CD pipelines with a proper GitOps pattern.
 **Blocked by:** E-3 (EKS), E-16 (Helm charts), E-4 (ECR)
 **Blocks:** None (but E-10 CI pipeline pushes tags that ArgoCD deploys)
 
@@ -2910,7 +2908,7 @@ Create ArgoCD Application CRDs for the istio and cilium clusters, following the 
 **Blocked by:** PETPLAT-112
 
 **Description:**
-Configure ArgoCD RBAC policies, user access, and security settings. Restrict who can sync prod applications.
+Configure ArgoCD RBAC policies, user access, and security settings. All clusters use auto-sync — restrict who can modify ArgoCD settings and register new clusters.
 
 **Technical Spec:** [GitOps with ArgoCD](./technical-spec.md#gitops-with-argocd)
 
