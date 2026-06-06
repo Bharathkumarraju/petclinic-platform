@@ -51,7 +51,7 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_security_group" "rds" {
   name        = "${var.name}-rds-sg"
-  description = "RDS MySQL — ingress rules added per-cluster via aws_security_group_rule"
+  description = "RDS MySQL - ingress rules added per-cluster via aws_security_group_rule"
   vpc_id      = aws_vpc.this.id
 
   tags = merge(var.tags, { Name = "${var.name}-rds-sg" })
@@ -61,7 +61,7 @@ resource "aws_security_group" "rds" {
 
 resource "aws_security_group" "alb" {
   name        = "${var.name}-alb-sg"
-  description = "Internet-facing ALB — HTTP and HTTPS from anywhere"
+  description = "Internet-facing ALB - HTTP and HTTPS from anywhere"
   vpc_id      = aws_vpc.this.id
 
   ingress {
