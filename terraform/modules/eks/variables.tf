@@ -77,6 +77,12 @@ variable "log_retention_days" {
   default     = 7
 }
 
+variable "admin_arns" {
+  description = "IAM principal ARNs granted cluster-admin access via EKS access entries"
+  type        = list(string)
+  default     = []
+}
+
 variable "tags" {
   description = "Additional tags to merge onto all resources"
   type        = map(string)
