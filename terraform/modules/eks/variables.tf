@@ -66,6 +66,7 @@ variable "addon_versions" {
     coredns    = optional(string, "")
     kube_proxy = optional(string, "")
     vpc_cni    = optional(string, "")
+    ebs_csi    = optional(string, "")
   })
   default = {}
 }
