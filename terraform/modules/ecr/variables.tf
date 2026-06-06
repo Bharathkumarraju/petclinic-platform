@@ -6,7 +6,7 @@ variable "service_names" {
 variable "image_tag_mutability" {
   description = "Tag mutability setting: MUTABLE allows tag overwrites, IMMUTABLE prevents them"
   type        = string
-  default     = "MUTABLE"
+  default     = "IMMUTABLE"
 
   validation {
     condition     = contains(["MUTABLE", "IMMUTABLE"], var.image_tag_mutability)

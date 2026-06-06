@@ -81,11 +81,11 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
-    description = "All outbound (ALB targets pods via IP mode)"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description = "NodePort traffic to EKS nodes"
+    from_port   = 30000
+    to_port     = 32767
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = merge(var.tags, { Name = "${var.name}-alb-sg" })

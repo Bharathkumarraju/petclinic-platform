@@ -57,7 +57,18 @@ variable "node_disk_size" {
 variable "cluster_log_types" {
   description = "EKS control plane log types to enable"
   type        = list(string)
-  default     = ["api", "audit", "authenticator"]
+  default     = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+}
+
+variable "public_access_cidrs" {
+  description = "CIDR blocks allowed to reach the EKS API public endpoint. Restrict to your egress IPs in non-demo environments."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "alb_sg_id" {
+  description = "Security group ID of the shared ALB — used to allow NodePort traffic from ALB to nodes"
+  type        = string
 }
 
 variable "addon_versions" {
@@ -73,7 +84,7 @@ variable "addon_versions" {
 variable "log_retention_days" {
   description = "CloudWatch log retention in days for EKS control plane logs"
   type        = number
-  default     = 7
+  default     = 90
 }
 
 variable "tags" {
