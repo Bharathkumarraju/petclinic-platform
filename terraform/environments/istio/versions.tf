@@ -17,7 +17,6 @@ terraform {
     key          = "petclinic/istio/terraform.tfstate"
     region       = "eu-central-1"
     use_lockfile = true
-    encrypt      = true
   }
 }
 

@@ -130,30 +130,6 @@ resource "aws_security_group_rule" "node_kubelet" {
   source_security_group_id = aws_security_group.cluster.id
 }
 
-resource "aws_security_group_rule" "node_from_alb" {
-  description              = "NodePort traffic from ALB"
-  type                     = "ingress"
-  from_port                = 30000
-  to_port                  = 32767
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.node.id
-  source_security_group_id = var.alb_sg_id
-}
-
-# ── KMS Key for Secrets Envelope Encryption ──────────────────────────────
-
-resource "aws_kms_key" "eks_secrets" {
-  description             = "EKS secrets envelope encryption for ${var.cluster_name}"
-  deletion_window_in_days = 7
-  enable_key_rotation     = true
-  tags                    = merge(var.tags, { Name = "${var.cluster_name}-secrets-key" })
-}
-
-resource "aws_kms_alias" "eks_secrets" {
-  name          = "alias/${var.cluster_name}-secrets"
-  target_key_id = aws_kms_key.eks_secrets.key_id
-}
-
 # ── CloudWatch Log Group for control plane logs ───────────────────────────
 
 resource "aws_cloudwatch_log_group" "eks" {
@@ -173,15 +149,7 @@ resource "aws_eks_cluster" "this" {
     subnet_ids              = var.subnet_ids
     security_group_ids      = [aws_security_group.cluster.id]
     endpoint_public_access  = true
-    endpoint_private_access = true
-    public_access_cidrs     = var.public_access_cidrs
-  }
-
-  encryption_config {
-    provider {
-      key_arn = aws_kms_key.eks_secrets.arn
-    }
-    resources = ["secrets"]
+    endpoint_private_access = false
   }
 
   enabled_cluster_log_types = var.cluster_log_types
