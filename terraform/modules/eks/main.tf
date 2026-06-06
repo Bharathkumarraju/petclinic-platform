@@ -199,7 +199,7 @@ resource "aws_eks_node_group" "this" {
   subnet_ids      = var.subnet_ids
   instance_types  = var.node_instance_types
   disk_size       = var.node_disk_size
-  ami_type        = "AL2_ARM_64"
+  ami_type        = "AL2023_ARM_64_STANDARD"
   capacity_type   = "ON_DEMAND"
 
   scaling_config {
