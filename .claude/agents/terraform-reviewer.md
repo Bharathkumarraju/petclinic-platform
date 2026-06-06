@@ -35,18 +35,17 @@ Review Terraform code and provide structured findings. You are READ-ONLY — you
 - [ ] terraform fmt formatting applied
 
 ### Cost Optimization
-- [ ] Right-sized instances for the environment (dev vs prod)
-- [ ] Spot instances considered for dev EKS nodes
-- [ ] RDS single-AZ for both dev and prod (cost optimization for learning)
+- [ ] All 3 clusters use same instance type (t4g.small ARM) for fair mesh comparison
+- [ ] Spot instances considered for EKS nodes
+- [ ] RDS single-AZ and shared across all 3 clusters (cost optimization for learning)
 - [ ] Lifecycle policies on ECR repos to limit stored images
-- [ ] No NAT Gateway (all-public subnet design saves ~$35/mo)
+- [ ] No NAT Gateway (all-public subnet design saves ~$35/mo per cluster)
 
 ### Reliability
-- [ ] RDS backup retention and skip-final-snapshot configured per environment
+- [ ] RDS backup retention and skip-final-snapshot configured
 - [ ] Auto-scaling configured where appropriate
 - [ ] Health checks defined for EKS node groups
-- [ ] RDS backup retention configured
-- [ ] State locking enabled (DynamoDB)
+- [ ] State locking enabled (S3 native locking — `use_lockfile = true`, no DynamoDB)
 
 ## Output Format
 

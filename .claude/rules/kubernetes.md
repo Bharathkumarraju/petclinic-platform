@@ -10,17 +10,15 @@ paths:
 
 ```
 k8s/
-├── base/                     # Shared manifests (all environments)
-│   ├── namespaces.yaml       # Namespace definitions
-│   ├── {service-name}/       # One directory per service
-│   │   ├── deployment.yaml
-│   │   ├── service.yaml
-│   │   └── configmap.yaml    # If needed
-│   ├── ingress/              # ALB Ingress Controller
+├── base/                     # Shared manifests (all clusters)
+│   ├── namespaces.yaml       # Namespace definitions (petclinic-linkerd, petclinic-istio, petclinic-cilium)
 │   └── external-secrets/     # ExternalSecret CRs
-└── overlays/
-    ├── dev/                  # Dev patches: 1 replica, smaller resources
-    └── prod/                 # Prod patches: 2+ replicas, HPA, larger resources
+├── argocd/
+│   ├── install/              # ArgoCD installation manifests
+│   └── applications/
+│       ├── linkerd/          # ArgoCD Application CRDs for Linkerd cluster (8 services)
+│       ├── istio/            # ArgoCD Application CRDs for Istio cluster (8 services)
+│       └── cilium/           # ArgoCD Application CRDs for Cilium cluster (8 services)
 ```
 
 ## Required Labels
@@ -32,7 +30,7 @@ metadata:
   labels:
     app.kubernetes.io/name: {service-name}
     app.kubernetes.io/part-of: petclinic
-    app.kubernetes.io/managed-by: kubectl
+    app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: {backend|frontend|infrastructure}
 ```
 
@@ -88,11 +86,11 @@ Use init containers to wait for dependencies:
 
 ## Namespaces
 
-- Dev: `petclinic-dev`
-- Prod: `petclinic-prod`
+- Linkerd cluster: `petclinic-linkerd`
+- Istio cluster:   `petclinic-istio`
+- Cilium cluster:  `petclinic-cilium`
 - All resources MUST specify their namespace explicitly
 
-## Overlay Patterns
+## Deployment Pattern
 
-Dev overlay: single replica, smaller resource requests, relaxed probes
-Prod overlay: 2+ replicas, HPA, full resource limits, strict probes
+All three clusters are identical in terms of replica counts and resource limits — this is a comparison platform, not a dev/prod split. Each cluster runs the same 8 services at the same scale for fair mesh performance comparison.
