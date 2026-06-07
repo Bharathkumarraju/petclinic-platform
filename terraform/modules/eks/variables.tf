@@ -54,6 +54,12 @@ variable "node_disk_size" {
   default     = 20
 }
 
+variable "node_ami_release_version" {
+  description = "AMI release version for the managed node group (e.g. 1.33.0-20250501). Leave empty to let AWS pick the latest for the cluster version. Must be updated in lockstep with kubernetes_version when upgrading."
+  type        = string
+  default     = ""
+}
+
 variable "cluster_log_types" {
   description = "EKS control plane log types to enable"
   type        = list(string)

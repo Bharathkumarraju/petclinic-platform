@@ -17,3 +17,8 @@ output "node_security_group_id" {
   description = "Node security group ID"
   value       = module.eks.node_security_group_id
 }
+
+output "lb_controller_role_arn" {
+  description = "IAM role ARN for AWS Load Balancer Controller — annotate kube-system/aws-load-balancer-controller SA with this"
+  value       = module.eks.lb_controller_role_arn
+}

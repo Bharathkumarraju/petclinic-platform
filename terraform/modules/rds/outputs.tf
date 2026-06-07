@@ -21,4 +21,5 @@ output "secret_arn" {
 output "connection_string" {
   description = "JDBC connection string for the petclinic database"
   value       = "jdbc:mysql://${aws_db_instance.this.address}:${aws_db_instance.this.port}/petclinic"
+  sensitive   = true
 }

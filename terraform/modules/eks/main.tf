@@ -200,6 +200,7 @@ resource "aws_eks_node_group" "this" {
   instance_types  = var.node_instance_types
   disk_size       = var.node_disk_size
   ami_type        = "AL2023_ARM_64_STANDARD"
+  release_version = var.node_ami_release_version != "" ? var.node_ami_release_version : null
   capacity_type   = "ON_DEMAND"
 
   scaling_config {
@@ -294,6 +295,47 @@ resource "aws_eks_addon" "ebs_csi" {
   resolve_conflicts_on_update = "OVERWRITE"
   tags                        = var.tags
   depends_on                  = [aws_eks_node_group.this]
+}
+
+# ── AWS Load Balancer Controller IRSA ────────────────────────────────────
+
+data "aws_iam_policy_document" "lb_controller_assume" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.this.arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.this.url, "https://", "")}:sub"
+      values   = ["system:serviceaccount:kube-system:aws-load-balancer-controller"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(aws_iam_openid_connect_provider.this.url, "https://", "")}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "lb_controller" {
+  name               = "${var.cluster_name}-lb-controller-role"
+  assume_role_policy = data.aws_iam_policy_document.lb_controller_assume.json
+  tags               = var.tags
+}
+
+resource "aws_iam_policy" "lb_controller" {
+  name        = "${var.cluster_name}-lb-controller-policy"
+  description = "IAM policy for AWS Load Balancer Controller on ${var.cluster_name}"
+  policy      = file("${path.module}/policies/lb-controller-policy.json")
+  tags        = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "lb_controller" {
+  role       = aws_iam_role.lb_controller.name
+  policy_arn = aws_iam_policy.lb_controller.arn
 }
 
 # ── Access Entries (cluster-admin) ────────────────────────────────────────

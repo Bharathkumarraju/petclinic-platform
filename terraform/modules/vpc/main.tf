@@ -24,6 +24,13 @@ resource "aws_subnet" "public" {
     Name                     = "${var.name}-public-${var.azs[count.index]}"
     "kubernetes.io/role/elb" = "1"
   })
+
+  lifecycle {
+    # kubernetes.io/cluster/{name}=shared tags are added by each EKS cluster
+    # environment via aws_ec2_tag resources. Ignore them here so the shared
+    # environment doesn't remove them when it runs independently.
+    ignore_changes = [tags]
+  }
 }
 
 resource "aws_route_table" "public" {
@@ -53,6 +60,14 @@ resource "aws_security_group" "rds" {
   name        = "${var.name}-rds-sg"
   description = "RDS MySQL - ingress rules added per-cluster via aws_security_group_rule"
   vpc_id      = aws_vpc.this.id
+
+  egress {
+    description = "All outbound (required for RDS enhanced monitoring and S3 backup via IGW)"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
   tags = merge(var.tags, { Name = "${var.name}-rds-sg" })
 }
