@@ -38,7 +38,7 @@ spec:
             readOnlyRootFilesystem: true
       containers:
         - name: discovery-server
-          image: 172586632398.dkr.ecr.eu-central-1.amazonaws.com/petclinic/discovery-server:sha-placeholder
+          image: 172586632398.dkr.ecr.eu-central-1.amazonaws.com/petclinic/discovery-server:v1.0.0
           imagePullPolicy: Always
           ports:
             - name: http
