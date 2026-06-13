@@ -17,6 +17,8 @@ spec:
       labels:
         app.kubernetes.io/name: zipkin
         app.kubernetes.io/part-of: petclinic
+      annotations:
+        linkerd.io/inject: enabled
     spec:
       securityContext:
         runAsNonRoot: true
@@ -79,3 +81,56 @@ spec:
       targetPort: 9411
       protocol: TCP
   type: ClusterIP
+---
+# The spring-petclinic-microservices-config repo references Zipkin as "tracing-server".
+# These ExternalName services make that hostname resolve to our Zipkin service from each app namespace.
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracing-server
+  namespace: petclinic-linkerd
+  labels:
+    app.kubernetes.io/name: zipkin
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  type: ExternalName
+  externalName: zipkin.tracing.svc.cluster.local
+  ports:
+    - port: 9411
+      targetPort: 9411
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracing-server
+  namespace: petclinic-istio
+  labels:
+    app.kubernetes.io/name: zipkin
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  type: ExternalName
+  externalName: zipkin.tracing.svc.cluster.local
+  ports:
+    - port: 9411
+      targetPort: 9411
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tracing-server
+  namespace: petclinic-cilium
+  labels:
+    app.kubernetes.io/name: zipkin
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  type: ExternalName
+  externalName: zipkin.tracing.svc.cluster.local
+  ports:
+    - port: 9411
+      targetPort: 9411
+      protocol: TCP
