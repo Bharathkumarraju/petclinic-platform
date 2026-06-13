@@ -53,3 +53,8 @@ output "lb_controller_role_arn" {
   description = "IAM role ARN for the AWS Load Balancer Controller (annotate the kube-system SA with this)"
   value       = aws_iam_role.lb_controller.arn
 }
+
+output "eso_role_arn" {
+  description = "IAM role ARN for External Secrets Operator (annotate external-secrets/external-secrets-sa with this)"
+  value       = aws_iam_role.eso.arn
+}

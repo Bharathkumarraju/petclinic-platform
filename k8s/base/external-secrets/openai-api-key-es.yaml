@@ -1,0 +1,22 @@
+# Applied once per cluster; MESH_NAMESPACE is substituted by apply-eso.sh
+# Results in a K8s Secret named "openai-api-key" with key: OPENAI_API_KEY
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: openai-api-key
+  namespace: MESH_NAMESPACE
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: openai-api-key
+    creationPolicy: Owner
+  data:
+    - secretKey: OPENAI_API_KEY
+      remoteRef:
+        key: petclinic/shared/openai-api-key

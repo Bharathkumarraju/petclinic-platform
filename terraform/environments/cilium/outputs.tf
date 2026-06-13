@@ -22,3 +22,8 @@ output "lb_controller_role_arn" {
   description = "IAM role ARN for AWS Load Balancer Controller — annotate kube-system/aws-load-balancer-controller SA with this"
   value       = module.eks.lb_controller_role_arn
 }
+
+output "eso_role_arn" {
+  description = "IAM role ARN for External Secrets Operator — annotate external-secrets/external-secrets-sa with this"
+  value       = module.eks.eso_role_arn
+}
