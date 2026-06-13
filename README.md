@@ -198,3 +198,9 @@ kubectl apply -f k8s/argocd/applications/{linkerd,istio,cilium}/
 | [`docs/technical-spec.md`](docs/technical-spec.md) | All infrastructure values and module interfaces |
 | [`docs/jira-backlog.md`](docs/jira-backlog.md) | Epic and story breakdown with acceptance criteria |
 | [`CLAUDE.md`](CLAUDE.md) | Claude Code conventions and workflow (AI agent instructions) |
+
+### Build Petclinic Docker images 
+
+```
+
+
