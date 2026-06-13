@@ -15,10 +15,13 @@ spec:
     metadata:
       labels:
         {{- include "petclinic-service.labels" . | nindent 8 }}
-      {{- with .Values.podAnnotations }}
       annotations:
+        {{- if .Values.configMap.data }}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "petclinic-service.fullname" . }}
       securityContext:

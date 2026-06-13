@@ -12,6 +12,28 @@ configMap:
   data:
     SPRING_PROFILES_ACTIVE: "docker"
 
+# Spring Cloud Config Server intercepts /{app}/{profile}/{label} paths before
+# actuator, so /actuator/health/readiness is matched as label=readiness and
+# returns 404. Use the base /actuator/health endpoint for all probes.
+probes:
+  startup:
+    path: /actuator/health
+    failureThreshold: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+  readiness:
+    path: /actuator/health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: /actuator/health
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
 autoscaling:
   enabled: false
 
