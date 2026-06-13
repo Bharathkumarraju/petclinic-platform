@@ -6,6 +6,7 @@ metadata:
   name: openai-api-key
   namespace: MESH_NAMESPACE
   labels:
+    app.kubernetes.io/name: openai-api-key
     app.kubernetes.io/part-of: petclinic
     app.kubernetes.io/managed-by: kubectl
 spec:

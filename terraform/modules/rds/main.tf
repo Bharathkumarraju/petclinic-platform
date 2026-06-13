@@ -60,8 +60,9 @@ resource "aws_db_instance" "this" {
 }
 
 resource "aws_secretsmanager_secret" "rds" {
-  name        = "${var.project}/${var.name}/rds-credentials"
-  description = "RDS master credentials for ${var.project}-${var.name}-mysql"
+  name                    = "${var.project}/${var.name}/rds-credentials"
+  description             = "RDS master credentials for ${var.project}-${var.name}-mysql"
+  recovery_window_in_days = 7
 
   tags = merge(var.tags, { Name = "${var.project}/${var.name}/rds-credentials" })
 }

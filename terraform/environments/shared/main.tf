@@ -29,6 +29,19 @@ module "rds" {
   }
 }
 
+module "secrets" {
+  source = "../../modules/secrets"
+
+  project        = "petclinic"
+  openai_api_key = var.openai_api_key
+
+  tags = {
+    Project     = "petclinic"
+    Environment = "shared"
+    ManagedBy   = "terraform"
+  }
+}
+
 module "dns" {
   source = "../../modules/dns"
 

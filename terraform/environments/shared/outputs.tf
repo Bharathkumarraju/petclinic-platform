@@ -53,6 +53,11 @@ output "ecr_repository_arns" {
   value       = module.ecr.repository_arns
 }
 
+output "openai_secret_arn" {
+  description = "Secrets Manager ARN for the OpenAI API key"
+  value       = module.secrets.openai_secret_arn
+}
+
 output "certificate_arn" {
   description = "ACM wildcard certificate ARN for *.kube-hub.com (shared across all 3 clusters)"
   value       = module.dns.certificate_arn

@@ -371,7 +371,7 @@ data "aws_iam_policy_document" "eso" {
   statement {
     effect    = "Allow"
     actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
-    resources = ["arn:aws:secretsmanager:*:*:secret:petclinic/shared/*"]
+    resources = ["arn:aws:secretsmanager:eu-central-1:*:secret:petclinic/shared/*"]
   }
 }
 
