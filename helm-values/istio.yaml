@@ -1,0 +1,5 @@
+replicaCount: 1
+
+# Istio ambient mode — mesh enrollment via namespace label (istio.io/dataplane-mode: ambient)
+# No pod-level sidecar annotation required
+podAnnotations: {}

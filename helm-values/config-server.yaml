@@ -1,0 +1,20 @@
+nameOverride: config-server
+
+component: server
+
+image:
+  repository: petclinic/config-server
+
+service:
+  port: 8888
+
+configMap:
+  data:
+    SPRING_PROFILES_ACTIVE: "docker"
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

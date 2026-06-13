@@ -1,0 +1,4 @@
+replicaCount: 1
+
+# Cilium service mesh — no pod annotations needed; mesh policy enforced via CiliumNetworkPolicy
+podAnnotations: {}

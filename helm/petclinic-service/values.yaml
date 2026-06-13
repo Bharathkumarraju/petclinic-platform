@@ -1,0 +1,83 @@
+nameOverride: ""
+fullnameOverride: ""
+
+# app.kubernetes.io/component label value
+component: "service"
+
+replicaCount: 1
+
+image:
+  registry: "172586632398.dkr.ecr.eu-central-1.amazonaws.com"
+  repository: ""
+  tag: "v1.0.0"
+  pullPolicy: Always
+
+service:
+  port: 8080
+
+# ConfigMap data — chart renders ConfigMap only when this is non-empty
+configMap:
+  data: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+probes:
+  startup:
+    path: /actuator/health
+    failureThreshold: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+  readiness:
+    path: /actuator/health/readiness
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  liveness:
+    path: /actuator/health/liveness
+    initialDelaySeconds: 60
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  readOnlyRootFilesystem: false
+
+# Init containers injected before the main container
+initContainers: []
+
+# Extra env vars (e.g. secret references) appended to the container env
+env: []
+
+# Pod-level annotations — used for mesh injection (linkerd.io/inject, etc.)
+podAnnotations: {}
+
+serviceAccount:
+  # Optional IRSA annotation: eks.amazonaws.com/role-arn
+  annotations: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
