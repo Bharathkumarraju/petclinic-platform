@@ -1,0 +1,69 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: petclinic-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: petclinic
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  groups:
+    - name: petclinic.availability
+      rules:
+        - alert: ServiceDown
+          expr: up{job=~".*petclinic.*"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Petclinic service {{ $labels.job }} is down"
+            description: "{{ $labels.instance }} has been unreachable for more than 1 minute."
+
+        - alert: PodRestartLoop
+          expr: increase(kube_pod_container_status_restarts_total{namespace=~"petclinic-.*"}[15m]) > 3
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} is restart looping"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} restarted {{ $value | printf \"%.0f\" }} times in 15 minutes."
+
+    - name: petclinic.performance
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(http_server_requests_seconds_count{namespace=~"petclinic-.*",status=~"5.."}[5m])) by (namespace, job)
+            /
+            sum(rate(http_server_requests_seconds_count{namespace=~"petclinic-.*"}[5m])) by (namespace, job)
+            > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High 5xx error rate on {{ $labels.job }}"
+            description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_server_requests_seconds_bucket{namespace=~"petclinic-.*"}[5m])) by (namespace, job, le)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High p95 latency on {{ $labels.job }}"
+            description: "p95 latency is {{ $value | humanizeDuration }} — above 500ms threshold."
+
+        - alert: HighMemoryUsage
+          expr: |
+            container_memory_working_set_bytes{namespace=~"petclinic-.*", container!=""}
+            /
+            container_spec_memory_limit_bytes{namespace=~"petclinic-.*", container!=""}
+            > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage in {{ $labels.pod }}"
+            description: "Container {{ $labels.container }} in pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of its memory limit."

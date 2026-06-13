@@ -1,0 +1,58 @@
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  limits_config:
+    retention_period: 168h   # 7 days
+    ingestion_rate_mb: 8
+    ingestion_burst_size_mb: 16
+    max_query_series: 5000
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    storageClass: gp2
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+
+# Disable distributed mode components
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+gateway:
+  enabled: false
+
+test:
+  enabled: false
+lokiCanary:
+  enabled: false
+
+# Memcached caches require 2Gi+ memory each — too large for t4g.small nodes (~1.5Gi allocatable)
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false

@@ -40,3 +40,7 @@ autoscaling:
 podDisruptionBudget:
   enabled: true
   minAvailable: 1
+
+# config-server does NOT have micrometer-registry-prometheus — scraping /actuator/prometheus returns 404
+serviceMonitor:
+  enabled: false
