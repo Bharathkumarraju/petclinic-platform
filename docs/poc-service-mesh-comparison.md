@@ -278,18 +278,18 @@ A CNI plugin and service mesh built entirely on **eBPF** — Linux kernel techno
 ### How it differs
 There is **no proxy process** at all — neither sidecar nor node-level daemon handles L4/L7 traffic in userspace. eBPF programs run inside the kernel itself, making Cilium the lowest-overhead option for raw packet processing.
 
-### Installation (CNI chaining mode)
+### Installation mode used: CNI chaining (not full Cilium)
 
-Installed on top of the existing AWS VPC CNI without replacing it — `kube-proxy` is kept. Cilium adds network policy enforcement and Hubble observability.
+In this POC, Cilium runs **on top of AWS VPC CNI** in chaining mode — it does not replace it. `kube-proxy` is kept. Cilium adds network policy enforcement and Hubble observability on top of the existing VPC networking.
 
 ```bash
 helm upgrade --install cilium cilium/cilium \
   -n kube-system --version 1.19.4 \
-  --set cni.chainingMode=aws-cni \
+  --set cni.chainingMode=aws-cni \   # chain on top of VPC CNI, do not replace it
   --set cni.exclusive=false \
   --set routingMode=native \
   --set enableIPv4Masquerade=false \
-  --set kubeProxyReplacement=false \
+  --set kubeProxyReplacement=false \ # keep kube-proxy
   --set hubble.enabled=true \
   --set hubble.relay.enabled=true \
   --set hubble.ui.enabled=true \
@@ -298,13 +298,33 @@ helm upgrade --install cilium cilium/cilium \
 
 Full script: `scripts/install-cilium.sh`
 
-### Components
+### Why Cilium does not fit our use case
+
+We are heavily invested in AWS VPC CNI and that is where the limitation surfaces. Cilium has two deployment modes, and the one that unlocks its full potential requires replacing the CNI entirely:
+
+| Mode | What you get | What you give up |
+|------|-------------|-----------------|
+| **CNI chaining** (this POC) | Hubble observability, `CiliumNetworkPolicy`, eBPF-accelerated policy | No kube-proxy replacement, no Cilium IPAM, no WireGuard mTLS, no full eBPF service routing, limited L7 features |
+| **Full Cilium CNI** (replace aws-node) | Everything above + kube-proxy replacement, Cilium IPAM, WireGuard transparent encryption, complete eBPF data plane | Must drain and re-provision nodes, lose AWS VPC CNI features (Security Groups for Pods, prefix delegation, VPC flow logs per-pod) |
+
+**Specific AWS VPC CNI features we rely on that Cilium CNI replacement would break:**
+
+- **Security Groups for Pods** (`aws-node` assigns ENIs so individual pods can have their own SG) — not supported when Cilium manages IPAM
+- **VPC-native pod IPs** — AWS VPC CNI allocates IPs directly from the VPC subnet; Cilium uses its own IPAM pool which requires additional subnet planning
+- **AWS-managed ENI lifecycle** — replacing `aws-node` means Cilium takes over ENI management, adding operational complexity on EKS
+- **EKS managed add-ons** (`vpc-cni`, `kube-proxy`) — replacing these breaks the EKS managed upgrade path
+
+**Bottom line:** To get real Cilium service mesh features (transparent mTLS via WireGuard, full eBPF networking), you have to commit to Cilium as your CNI from day one — it cannot be added non-disruptively to an existing VPC-CNI-based EKS cluster. Since our platform is built around AWS VPC CNI and EKS managed add-ons, Cilium is eliminated as a viable service mesh choice for this workload.
+
+### What we do get in chaining mode (POC only)
+
+Even in chaining mode, Hubble provides genuinely useful visibility:
 
 ```
 namespace: kube-system
-├── cilium                  (DaemonSet — eBPF agent on every node)
-├── cilium-envoy            (DaemonSet — L7 proxy for HTTP-level policy)
-├── cilium-operator         (manages CiliumNetworkPolicy, IPAM)
+├── cilium                  (DaemonSet — eBPF agent, policy enforcement)
+├── cilium-envoy            (DaemonSet — L7 proxy for HTTP-level CiliumNetworkPolicy)
+├── cilium-operator         (manages CiliumNetworkPolicy, health)
 ├── hubble-relay            (aggregates flow data from all nodes)
 └── hubble-ui               (web UI — real-time network flow visualisation)
 ```
