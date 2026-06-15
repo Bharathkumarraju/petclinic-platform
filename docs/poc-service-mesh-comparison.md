@@ -88,14 +88,17 @@ Eight Spring Boot 3 services deployed on every cluster:
 ## Linkerd
 
 ### What it is
-The original lightweight sidecar mesh. Written in Rust (linkerd-proxy), lowest latency overhead among sidecar-based meshes. Extremely simple to operate.
+
+Linkerd is a **sidecar-based** service mesh — every application pod gets an additional `linkerd-proxy` container injected automatically. This means every pod runs **2/2** containers (app + proxy). The proxy is written in Rust and is the lowest-latency sidecar among mainstream service meshes, but the sidecar model has a real cost: memory overhead per pod, additional container restarts on upgrades, and iptables-based traffic interception on every node.
+
+> **Key limitation vs Istio Ambient and Cilium:** Linkerd always requires a sidecar proxy per pod. There is no ambient or eBPF mode. On this platform (8 services × 2 replicas = 16 pods), that means 16 additional `linkerd-proxy` containers consuming ~20–50 MB each.
 
 Linkerd ships as **two separate Helm charts** installed into two separate namespaces — this is intentional, not an accident:
 
 | Namespace | Chart | Role | Required? |
 |-----------|-------|------|-----------|
 | `linkerd` | `linkerd-crds` + `linkerd-control-plane` | **The mesh** — identity (CA), destination (service discovery), proxy-injector (mutating webhook). Makes mTLS and traffic encryption work. | Yes |
-| `linkerd-viz` | `linkerd-viz` | **Observability dashboard** — web UI, tap (live traffic inspection), metrics-api, bundled Prometheus. | Optional |
+| `linkerd-viz` | `linkerd-viz` | **Observability dashboard** — web UI, tap (live traffic inspection), tap-injector, metrics-api, bundled Prometheus. | Optional |
 
 **Why split?** The control plane is security-critical and must be minimal. `linkerd-viz` adds a web server, a full Prometheus, and `tap` (which can read live request payloads) — you may not want that in a locked-down production cluster. Many teams run the control plane everywhere but only install viz in staging for debugging, relying on their own Prometheus/Grafana stack in production.
 
@@ -126,6 +129,8 @@ helm upgrade --install linkerd-viz linkerd/linkerd-viz \
   -n linkerd-viz --create-namespace --version 30.12.11
 
 # Step 5: Inject proxies by restarting app pods
+# The proxy-injector webhook injects linkerd-proxy into pods on namespace
+# annotated with linkerd.io/inject: enabled. Existing pods need a rollout restart.
 kubectl rollout restart deployment -n petclinic-linkerd
 ```
 
@@ -136,15 +141,77 @@ Full script: `scripts/install-linkerd.sh`
 ```
 namespace: linkerd          ← THE MESH (always required)
 ├── linkerd-destination     (service discovery, load balancing, endpoint resolution)
-├── linkerd-identity        (certificate authority — issues mTLS certs to proxies)
-└── linkerd-proxy-injector  (mutating webhook — injects linkerd-proxy sidecar on pod create)
+│                            runs 4/4 — includes sp-validator, policy-controller + proxy
+├── linkerd-identity        (certificate authority — issues mTLS certs to proxies; 2/2)
+├── linkerd-proxy-injector  (mutating webhook — injects linkerd-proxy sidecar on pod create; 2/2)
+└── linkerd-heartbeat       (CronJob — phones home to buoyant.io with cluster stats)
+
+Services in linkerd namespace:
+  linkerd-dst               (destination controller gRPC endpoint)
+  linkerd-dst-headless      (headless variant for direct proxy connections)
+  linkerd-identity          (identity gRPC — proxies exchange certs here)
+  linkerd-policy            (policy controller endpoint)
+  linkerd-policy-validator  (admission webhook for Server/AuthorizationPolicy CRDs)
+  linkerd-proxy-injector    (mutating webhook endpoint)
+  linkerd-sp-validator      (ServiceProfile CRD validation webhook)
 
 namespace: linkerd-viz      ← OBSERVABILITY (optional, not needed for mesh to function)
-├── web                     (dashboard UI)
-├── tap                     (live traffic inspection — streams request/response metadata)
-├── metrics-api             (aggregates Prometheus data for dashboard)
-└── prometheus              (bundled Prometheus scraping mesh metrics)
+├── web                     (dashboard UI; 2/2)
+├── tap                     (live traffic inspection — streams request/response metadata; 2/2)
+├── tap-injector            (mutating webhook — injects tap headers into proxied requests; 2/2)
+├── metrics-api             (aggregates Prometheus data for dashboard; 2/2)
+└── prometheus              (bundled Prometheus scraping mesh metrics; 2/2)
 ```
+
+### Running state (live cluster output)
+
+```
+$ kubectl get all -n linkerd --context petclinic-linkerd
+
+NAME                                      READY   STATUS    RESTARTS   AGE
+pod/linkerd-destination-xxxxxxxxx-xxxxx   4/4     Running   0          2d
+pod/linkerd-identity-xxxxxxxxx-xxxxx      2/2     Running   0          2d
+pod/linkerd-proxy-injector-xxxxxxx-xxxxx  2/2     Running   0          2d
+
+NAME                              TYPE        CLUSTER-IP   PORT(S)
+service/linkerd-dst               ClusterIP   10.x.x.x     8086/TCP
+service/linkerd-dst-headless      ClusterIP   None         8086/TCP
+service/linkerd-identity          ClusterIP   10.x.x.x     8080/TCP
+service/linkerd-policy            ClusterIP   10.x.x.x     8090/TCP
+service/linkerd-policy-validator  ClusterIP   10.x.x.x     443/TCP
+service/linkerd-proxy-injector    ClusterIP   10.x.x.x     443/TCP
+service/linkerd-sp-validator      ClusterIP   10.x.x.x     443/TCP
+
+NAME                                                SCHEDULE      SUSPEND   ACTIVE
+cronjob.batch/linkerd-heartbeat                     0 6 * * *     False     0
+```
+
+```
+$ kubectl get all -n linkerd-viz --context petclinic-linkerd
+
+NAME                                     READY   STATUS    RESTARTS   AGE
+pod/metrics-api-xxxxxxxxx-xxxxx          2/2     Running   0          2d
+pod/prometheus-xxxxxxxxx-xxxxx           2/2     Running   0          2d
+pod/tap-xxxxxxxxx-xxxxx                  2/2     Running   0          2d
+pod/tap-injector-xxxxxxxxx-xxxxx         2/2     Running   0          2d
+pod/web-xxxxxxxxx-xxxxx                  2/2     Running   0          2d
+```
+
+```
+$ kubectl get pods -n petclinic-linkerd --context petclinic-linkerd
+
+NAME                                 READY   STATUS    RESTARTS   AGE
+admin-server-xxxxxxxxx-xxxxx         2/2     Running   0          2d
+api-gateway-xxxxxxxxx-xxxxx          2/2     Running   0          2d
+config-server-xxxxxxxxx-xxxxx        2/2     Running   0          2d
+customers-service-xxxxxxxxx-xxxxx    2/2     Running   0          2d
+discovery-server-xxxxxxxxx-xxxxx     2/2     Running   0          2d
+genai-service-xxxxxxxxx-xxxxx        2/2     Running   0          2d
+vets-service-xxxxxxxxx-xxxxx         2/2     Running   0          2d
+visits-service-xxxxxxxxx-xxxxx       2/2     Running   0          2d
+```
+
+All 8 services show **2/2 READY** — one app container and one `linkerd-proxy` sidecar per pod.
 
 ### How it works in this POC
 
@@ -166,19 +233,23 @@ kubectl port-forward svc/web 8084:8084 -n linkerd-viz --context petclinic-linker
 # Grafana (kube-prometheus-stack)
 kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring --context petclinic-linkerd
 # Open: http://localhost:3000  (admin / petclinic-grafana)
+
+# Zipkin
+kubectl port-forward svc/zipkin 9411:9411 -n tracing --context petclinic-linkerd
+# Open: http://localhost:9411
 ```
 
 ### Verify injection
 
 ```bash
+# App pods — all should show 2/2 READY (app + linkerd-proxy sidecar)
 kubectl get pods -n petclinic-linkerd --context petclinic-linkerd
-# All pods should show 2/2 READY (app + linkerd-proxy)
 
-kubectl get pods -n linkerd --context petclinic-linkerd
-# Control plane: destination, identity, proxy-injector
+# Control plane — destination (4/4), identity (2/2), proxy-injector (2/2) + heartbeat cronjob
+kubectl get all -n linkerd --context petclinic-linkerd
 
-kubectl get pods -n linkerd-viz --context petclinic-linkerd
-# Viz: web, tap, tap-injector, metrics-api, prometheus
+# Viz — web, tap, tap-injector, metrics-api, prometheus (all 2/2)
+kubectl get all -n linkerd-viz --context petclinic-linkerd
 ```
 
 ---
