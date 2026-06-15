@@ -239,6 +239,48 @@ kubectl port-forward svc/zipkin 9411:9411 -n tracing --context petclinic-linkerd
 # Open: http://localhost:9411
 ```
 
+### Sidecar injection: namespace label vs pod annotation
+
+The `proxy-injector` mutating webhook checks for `linkerd.io/inject: enabled` on either the **namespace** or the **pod template** — whichever is present. Both work identically.
+
+| Approach | Where set | How |
+|----------|-----------|-----|
+| Namespace label | `kubectl label namespace petclinic-linkerd linkerd.io/inject=enabled` | Injects every pod in that namespace automatically — no per-manifest change needed |
+| Pod annotation | `podAnnotations: linkerd.io/inject: enabled` in Helm values / pod spec | Injects only pods that carry the annotation — namespace needs no label |
+
+**This POC uses pod-level annotation** (`helm-values/linkerd.yaml`), not a namespace label. This is why `kubectl get ns petclinic-linkerd --show-labels` shows no Linkerd label, yet all pods are 2/2:
+
+```yaml
+# helm-values/linkerd.yaml
+podAnnotations:
+  linkerd.io/inject: enabled
+```
+
+Helm renders this into every Deployment's pod template:
+
+```yaml
+spec:
+  template:
+    metadata:
+      annotations:
+        linkerd.io/inject: enabled   # proxy-injector webhook fires on this
+```
+
+**Practical difference:** Pod-level annotation lets you opt out individual pods by setting `linkerd.io/inject: disabled` on them, even while everything else in the namespace is injected. Namespace-level label is simpler but less granular.
+
+```bash
+# Confirm injection annotation is set on pod templates (not namespace)
+kubectl get pods -n petclinic-linkerd --context petclinic-linkerd \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.annotations.linkerd\.io/inject}{"\n"}{end}'
+
+# Show all Linkerd-related annotations on every pod
+kubectl get pods -n petclinic-linkerd --context petclinic-linkerd \
+  -o json | jq -r '.items[] | .metadata.name + " → " + (.metadata.annotations | to_entries[] | select(.key | startswith("linkerd")) | .key + "=" + .value)'
+
+# Confirm the namespace has NO Linkerd label (injection is pod-driven)
+kubectl get ns petclinic-linkerd --show-labels --context petclinic-linkerd
+```
+
 ### Verify injection
 
 ```bash
