@@ -90,23 +90,42 @@ Eight Spring Boot 3 services deployed on every cluster:
 ### What it is
 The original lightweight sidecar mesh. Written in Rust (linkerd-proxy), lowest latency overhead among sidecar-based meshes. Extremely simple to operate.
 
+Linkerd ships as **two separate Helm charts** installed into two separate namespaces — this is intentional, not an accident:
+
+| Namespace | Chart | Role | Required? |
+|-----------|-------|------|-----------|
+| `linkerd` | `linkerd-crds` + `linkerd-control-plane` | **The mesh** — identity (CA), destination (service discovery), proxy-injector (mutating webhook). Makes mTLS and traffic encryption work. | Yes |
+| `linkerd-viz` | `linkerd-viz` | **Observability dashboard** — web UI, tap (live traffic inspection), metrics-api, bundled Prometheus. | Optional |
+
+**Why split?** The control plane is security-critical and must be minimal. `linkerd-viz` adds a web server, a full Prometheus, and `tap` (which can read live request payloads) — you may not want that in a locked-down production cluster. Many teams run the control plane everywhere but only install viz in staging for debugging, relying on their own Prometheus/Grafana stack in production.
+
 ### Installation
 
 ```bash
-# Generates trust anchor + issuer certs via step CLI, then Helm
-helm upgrade --install linkerd-crds linkerd/linkerd-crds \
-  -n linkerd --version 1.8.0
+# Step 1: Generate trust anchor (root CA) and issuer certs via step CLI
+step certificate create root.linkerd.cluster.local ca.crt ca.key \
+  --profile root-ca --no-password --insecure --not-after 87600h
 
+step certificate create identity.linkerd.cluster.local issuer.crt issuer.key \
+  --profile intermediate-ca --not-after 8760h --no-password --insecure \
+  --ca ca.crt --ca-key ca.key
+
+# Step 2: Install CRDs
+helm upgrade --install linkerd-crds linkerd/linkerd-crds \
+  -n linkerd --create-namespace --version 1.8.0
+
+# Step 3: Install control plane (the mesh)
 helm upgrade --install linkerd-control-plane linkerd/linkerd-control-plane \
   -n linkerd --version 1.16.11 \
   --set-file identityTrustAnchorsPEM=ca.crt \
   --set-file identity.issuer.tls.crtPEM=issuer.crt \
   --set-file identity.issuer.tls.keyPEM=issuer.key
 
+# Step 4: Install viz dashboard (optional but used in this POC)
 helm upgrade --install linkerd-viz linkerd/linkerd-viz \
-  -n linkerd-viz --version 30.12.11
+  -n linkerd-viz --create-namespace --version 30.12.11
 
-# Inject proxies by restarting app pods
+# Step 5: Inject proxies by restarting app pods
 kubectl rollout restart deployment -n petclinic-linkerd
 ```
 
@@ -115,30 +134,36 @@ Full script: `scripts/install-linkerd.sh`
 ### Control plane components
 
 ```
-namespace: linkerd
-├── linkerd-destination     (service discovery, load balancing)
-├── linkerd-identity        (certificate authority, mTLS issuance)
-└── linkerd-proxy-injector  (mutating webhook — injects sidecar on pod create)
+namespace: linkerd          ← THE MESH (always required)
+├── linkerd-destination     (service discovery, load balancing, endpoint resolution)
+├── linkerd-identity        (certificate authority — issues mTLS certs to proxies)
+└── linkerd-proxy-injector  (mutating webhook — injects linkerd-proxy sidecar on pod create)
 
-namespace: linkerd-viz
-├── web                     (dashboard)
-├── tap                     (live traffic inspection)
+namespace: linkerd-viz      ← OBSERVABILITY (optional, not needed for mesh to function)
+├── web                     (dashboard UI)
+├── tap                     (live traffic inspection — streams request/response metadata)
 ├── metrics-api             (aggregates Prometheus data for dashboard)
-└── prometheus              (local scraper)
+└── prometheus              (bundled Prometheus scraping mesh metrics)
 ```
 
 ### How it works in this POC
 
-Every pod in `petclinic-linkerd` runs **2/2** containers — the app and the `linkerd-proxy` sidecar. The proxy intercepts all inbound and outbound TCP via iptables, terminates/originates mTLS, and emits golden-signal metrics (latency, RPS, success rate) to Prometheus.
+Every pod in `petclinic-linkerd` runs **2/2** containers — the app and the `linkerd-proxy` sidecar. The `proxy-injector` webhook automatically injects the proxy when a pod is created in a namespace annotated with `linkerd.io/inject: enabled`. The proxy intercepts all inbound and outbound TCP via iptables, terminates/originates mTLS, and emits golden-signal metrics (latency, RPS, success rate) to Prometheus.
+
+```
+Pod (2/2):
+├── app container          (Spring Boot service)
+└── linkerd-proxy          (Rust proxy — handles all TCP in/out, mTLS, metrics)
+```
 
 ### Access
 
 ```bash
-# Linkerd dashboard
+# Linkerd dashboard (linkerd-viz)
 kubectl port-forward svc/web 8084:8084 -n linkerd-viz --context petclinic-linkerd
 # Open: http://localhost:8084
 
-# Grafana
+# Grafana (kube-prometheus-stack)
 kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring --context petclinic-linkerd
 # Open: http://localhost:3000  (admin / petclinic-grafana)
 ```
@@ -147,7 +172,13 @@ kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring --c
 
 ```bash
 kubectl get pods -n petclinic-linkerd --context petclinic-linkerd
-# All pods should show 2/2 READY
+# All pods should show 2/2 READY (app + linkerd-proxy)
+
+kubectl get pods -n linkerd --context petclinic-linkerd
+# Control plane: destination, identity, proxy-injector
+
+kubectl get pods -n linkerd-viz --context petclinic-linkerd
+# Viz: web, tap, tap-injector, metrics-api, prometheus
 ```
 
 ---
