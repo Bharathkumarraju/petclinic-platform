@@ -1,0 +1,13 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AWSEKSAssumeRole",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::120430566909:role/abex-eks-app-01-network-eks-node-group"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}

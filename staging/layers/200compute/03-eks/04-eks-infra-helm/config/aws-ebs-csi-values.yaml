@@ -1,0 +1,13 @@
+storageClasses:
+  - name: gp3
+    annotations:
+      storageclass.kubernetes.io/is-default-class: "true"
+    provisioner: ebs.csi.aws.com
+    allowVolumeExpansion: true
+    reclaimPolicy: Delete
+    volumeBindingMode: WaitForFirstConsumer    
+    parameters:
+      fsType: ext4
+      type: gp3
+
+

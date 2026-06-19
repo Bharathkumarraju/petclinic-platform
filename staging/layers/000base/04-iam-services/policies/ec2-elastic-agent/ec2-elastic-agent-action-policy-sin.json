@@ -1,0 +1,151 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams",
+        "logs:PutRetentionPolicy",
+        "logs:DescribeLogGroups",
+        "logs:FilterLogEvents",
+        "cloudwatch:PutMetricData",
+        "cloudwatch:GetMetricData"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:logs:ap-southeast-1:${account_id}:log-group:/aws/ec2/instance/*:log-stream:*",
+      "Sid": "AWSCloudWatchLogsAccess"
+    },
+    {
+      "Action": [
+        "cloudwatch:*"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:cloudwatch:ap-southeast-1:993533333148:metric:*",
+      "Sid": "AWSCloudWatchMetricsAccess"
+    },
+    {
+      "Action": [
+        "logs:FilterLogEvents",
+        "logs:DescribeLogGroups"
+      ],
+      "Effect": "Allow",
+      "Resource": "arn:aws:logs:ap-southeast-1:${account_id}:log-group:*"
+    },
+    {
+      "Action": [
+        "cloudwatch:ListMetrics",
+        "cloudwatch:GetMetricData"
+      ],
+      "Effect": "Allow",
+      "Resource": "*"
+    },
+    {
+      "Action": [
+        "kms:Decrypt"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:kms:ap-southeast-1:${account_id}:key/05ea38be-58da-411b-bd57-b9b68ebac3e9",
+        "arn:aws:kms:ap-southeast-1:${account_id}:key/0397868f-b967-4531-99bb-59b331e37236"
+      ]
+    },
+    {
+      "Action": [
+        "ec2:DescribeRegions",
+        "ec2:DescribeInstances",
+        "ec2:DescribeTags"
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "AllowReadingTagsInstancesRegionsFromEC2"
+    },
+    {
+      "Action": "tag:GetResources",
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "AllowReadingResourcesForTags"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iam:ListAccountAliases",
+      "Resource": "*",
+      "Sid": "AllowListingOfAWSAccountAliases"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "organizations:ListAccounts",
+      "Resource": "*",
+      "Sid": "AllowListingOfAWSAccountInOrganization"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBInstances",
+        "rds:ListTagsForResource"
+      ],
+      "Resource": [
+        "arn:aws:rds:ap-southeast-1:${account_id}:db*",
+        "arn:aws:rds:ap-southeast-1:${account_id}:db-instance*"
+      ],
+      "Sid": "AllowReadingRDSDetails"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetBucketLocation"
+      ],
+      "Resource": [
+        "arn:aws:s3:::*"
+      ],
+      "Sid": "AllowListingOfS3Objects"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::*/*"
+      ],
+      "Sid": "AllowGettingOfS3Objects"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "sns:ListTopics",
+      "Resource": "*",
+      "Sid": "AllowListingOfSNSTopics"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:ChangeMessageVisibility",
+        "sqs:DeleteMessage",
+        "sqs:ListQueues",
+        "sqs:ReceiveMessage"
+      ],
+      "Resource": "*",
+      "Sid": "AllowSQSManipulation"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "sts:GetCallerIdentity",
+      "Resource": "*",
+      "Sid": "AllowGettingSTSCallerID"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "${enrollment_token_secret_arn}",
+      "Sid": "AllowGetEnrollmentToken"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "${secretsmanager_kms_key_arn}",
+      "Sid": "AllowDecryptEnrollmentToken"
+    }
+  ]
+}

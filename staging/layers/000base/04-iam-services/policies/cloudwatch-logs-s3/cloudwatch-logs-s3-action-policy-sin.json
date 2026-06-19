@@ -1,0 +1,54 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "logs:CreateExportTask",
+        "logs:CancelExportTask",
+        "logs:Describe*",
+        "logs:ListTagsLogGroup",
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Effect": "Allow",
+      "Resource": "*"
+    },
+    {
+      "Action": [
+        "ssm:DescribeParameters",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath",
+        "ssm:PutParameter"
+      ],
+      "Resource": "arn:aws:ssm:ap-southeast-1:993533333148:parameter/log-exporter-last-export/*",
+      "Effect": "Allow"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+          "sns:Publish"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Action": [
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:Encrypt",
+        "kms:DescribeKey",
+        "kms:Decrypt"
+      ],
+      "Resource": "arn:aws:kms:ap-southeast-1:134999573173:key/73b66379-5a98-4aad-9432-ef1ee690a33d",
+      "Effect": "Allow"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+          "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::abex-cloudwatch-archive-bucket-log-archive-sin/*"
+    }
+  ]
+}

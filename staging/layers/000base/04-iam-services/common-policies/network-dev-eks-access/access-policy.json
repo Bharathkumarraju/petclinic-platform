@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AWSEKSAssumeRole",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::567537190208:role/arc-20260122060140535800000001"
+      },
+      "Action": [
+        "sts:AssumeRole",
+        "sts:TagSession"
+      ]
+    }
+  ]
+}

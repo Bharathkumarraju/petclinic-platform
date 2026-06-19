@@ -1,0 +1,92 @@
+{
+    "rules": [
+      {
+        "rule-type": "selection",
+        "rule-id": "765075422",
+        "rule-name": "765056017",
+        "object-locator": {
+          "schema-name": "MARGIN",
+          "table-name": "participant_audit"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "765056017",
+        "rule-name": "765056017",
+        "object-locator": {
+          "schema-name": "MARGIN",
+          "table-name": "participant"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "753631647",
+        "rule-name": "753565460",
+        "object-locator": {
+          "schema-name": "MARGIN",
+          "table-name": "instrument_audit"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "753615794",
+        "rule-name": "753565460",
+        "object-locator": {
+          "schema-name": "MARGIN",
+          "table-name": "instrument"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "753604584",
+        "rule-name": "753565460",
+        "object-locator": {
+          "schema-name": "MARGIN",
+          "table-name": "guarantee_fund_requirement"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "753590515",
+        "rule-name": "753565460",
+        "object-locator": {
+          "schema-name": "MARGIN",
+          "table-name": "account_audit"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "753565460",
+        "rule-name": "753565460",
+        "object-locator": {
+          "schema-name": "MARGIN",
+          "table-name": "account"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "753565461",
+        "rule-name": "753565461",
+        "object-locator": {
+          "schema-name": "MARGIN",
+          "table-name": "guarantee_fund_requirement_audit"
+        },
+        "rule-action": "include",
+        "filters": []
+      }
+    ]
+  }

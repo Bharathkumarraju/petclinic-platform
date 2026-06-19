@@ -1,0 +1,59 @@
+{
+    "rules": [
+      {
+        "rule-type": "selection",
+        "rule-id": "756116662",
+        "rule-name": "756007519",
+        "object-locator": {
+          "schema-name": "TCEXBERRY",
+          "table-name": "trade_message"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "756102948",
+        "rule-name": "756007519",
+        "object-locator": {
+          "schema-name": "TCEXBERRY",
+          "table-name": "tc_exberry_state"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "756092113",
+        "rule-name": "756007519",
+        "object-locator": {
+          "schema-name": "TCEXBERRY",
+          "table-name": "response_message"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "756074518",
+        "rule-name": "756007519",
+        "object-locator": {
+          "schema-name": "TCEXBERRY",
+          "table-name": "outgoing_message"
+        },
+        "rule-action": "include",
+        "filters": []
+      },
+      {
+        "rule-type": "selection",
+        "rule-id": "756007519",
+        "rule-name": "756007519",
+        "object-locator": {
+          "schema-name": "TCEXBERRY",
+          "table-name": "market_data_message"
+        },
+        "rule-action": "include",
+        "filters": []
+      }
+    ]
+  }

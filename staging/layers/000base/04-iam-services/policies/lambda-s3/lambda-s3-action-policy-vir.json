@@ -1,0 +1,42 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "s3:GetObject"
+      ],
+    "Effect": "Allow",
+    "Resource": "arn:aws:s3:::abex-staging-vir-lambda-bucket/*",
+    "Sid": "LambdaReadfromS3"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+      ],
+      "Resource": [
+          "arn:aws:logs:ap-southeast-1:993533333148:log-group:/aws/lambda/alerts-slack-staging-vir:*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+          "sns:Publish"
+      ],
+      "Resource": "arn:aws:sns:ap-southeast-1:993533333148:*"
+    },
+    {
+      "Sid": "AllowKMSUsage",
+      "Effect": "Allow",
+      "Action": [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt"
+      ],
+      "Resource": [
+        "arn:aws:kms:us-east-1:993533333148:key/0a56c848-287e-4bbf-b598-f7b9632349cc"
+      ]
+    }
+  ]
+}

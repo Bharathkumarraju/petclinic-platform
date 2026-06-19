@@ -1,0 +1,53 @@
+serviceAccount:
+  create: false
+  name: ${service_account}
+config:
+  inputs: |
+    [INPUT]
+        Name             tail
+        Path             /var/log/containers/*.log
+        Exclude_Path     /var/log/containers/fluent-bit*
+        multiline.parser docker, cri
+        Tag              kube.*
+        Mem_Buf_Limit    10MB
+        Skip_Long_Lines  On
+  filters: |
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Merge_Log           On
+        Keep_Log            Off
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude On
+    [FILTER]
+        Name   rewrite_tag
+        Match  kube.*
+        Rule   $kubernetes['namespace_name'] ^(.*)$ namespace.$0 false
+
+    [FILTER]
+        Name   rewrite_tag
+        Match  namespace.*
+        Rule   $kubernetes['container_name'] ^(.*)$ container.$0.$TAG false
+
+    [FILTER]
+        Name   rewrite_tag
+        Match  container.*
+        Rule   $kubernetes['pod_name'] ^(.*)$ pod.$0.$TAG false
+  outputs: |
+    [OUTPUT]
+        Name s3
+        Match *
+        bucket ${s3_bucket}
+        region ap-southeast-1
+        total_file_size 5M
+        upload_timeout 10m
+        store_dir /fluent-bit/s3
+        use_put_object Off
+        content_type text/plain
+        s3_key_format /aws/eks/namespace/$TAG[5]/pod/$TAG[1]/container/$TAG[3]/%Y/%m/%d/$TAG[3]_%H_%M_%S_$UUID.gz
+        compression gzip
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "infra"
+    effect: "NoSchedule"

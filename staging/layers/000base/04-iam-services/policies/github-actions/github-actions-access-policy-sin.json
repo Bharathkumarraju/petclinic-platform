@@ -1,0 +1,24 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+      {
+          "Sid": "AWSEKSAssumeRole",
+          "Effect": "Allow",
+          "Principal": {
+              "Service": "eks.amazonaws.com"
+          },
+          "Action": "sts:AssumeRole"
+      },
+      {
+          "Effect": "Allow",
+          "Principal": {
+              "AWS": "arn:aws:iam::120430566909:role/svc-ec2-github-runner-network-sin"
+          },
+          "Action": [
+              "sts:AssumeRole",
+              "sts:TagSession",
+              "sts:SetSourceIdentity"
+          ]
+      }
+  ]
+}

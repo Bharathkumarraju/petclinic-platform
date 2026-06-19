@@ -1,0 +1,29 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:ListImages",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:PutImage",
+          "ecr:CompleteLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:InitiateLayerUpload"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+          "arn:aws:ecr:ap-southeast-1:120430566909:repository/*"
+      ],
+      "Sid": "ECRPermissions"
+    },
+    {
+      "Action": [
+      "ecr:GetAuthorizationToken"
+      ],
+      "Effect": "Allow",
+      "Resource": "*"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+serviceAccount:
+  name: external-dns-sa
+provider: aws
+aws:
+  zoneType: private
+policy: sync  
+tolerations:
+  - key: "dedicated"
+    operator: "Equal"
+    value: "infra"
+    effect: "NoSchedule"
+labels:
+  env: staging

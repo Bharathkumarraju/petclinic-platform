@@ -1,0 +1,36 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "rds:Describe*",
+        "rds:ListTagsForResource",
+        "rds:DownloadCompleteDBLogFile",
+        "rds:View*",
+        "rds:List*",
+        "rds:CreateDBInstance",
+        "rds:DeleteDBInstance",
+        "rds:ModifyDBInstance",
+        "rds:AddTagsToResource",
+        "rds:RemoveTagsFromResource"
+      ],
+      "Resource": "arn:aws:rds:ap-southeast-1:${account_id}:db:*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "kms:Decrypt",
+        "kms:DescribeKey"
+      ],
+      "Resource": "arn:aws:kms:ap-southeast-1:${account_id}:key/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetSecretValue"
+      ],
+      "Resource": "arn:aws:secretsmanager:ap-southeast-1:${account_id}:secret:*"
+    }
+  ]
+}
