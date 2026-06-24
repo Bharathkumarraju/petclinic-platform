@@ -1,0 +1,21 @@
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: app-ds
+  namespace: frontend
+spec:
+  host: app-svc
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 2
+        connectTimeout: 30s
+      http:
+        http2MaxRequests: 2
+        maxRequestsPerConnection: 10
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 5m
+      baseEjectionTime: 10m
+
+

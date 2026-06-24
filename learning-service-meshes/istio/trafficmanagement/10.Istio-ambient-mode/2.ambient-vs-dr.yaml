@@ -1,0 +1,44 @@
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: hello-world-dr
+  namespace: hello
+spec:
+  host: helloworld
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+
+
+---
+
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: hello-world-vs
+  namespace: hello
+spec:
+  hosts:
+  - helloworld
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: helloworld.default.svc.cluster.local
+        port:
+          number: 5000
+        subset: v1
+      weight: 95
+    - destination:
+        host: helloworld.default.svc.cluster.local
+        port:
+          number: 5000
+        subset: v2
+      weight: 5
+

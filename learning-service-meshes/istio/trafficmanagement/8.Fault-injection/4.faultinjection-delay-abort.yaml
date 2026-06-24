@@ -1,0 +1,38 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: hello-world-vs
+spec:
+  hosts:
+  - helloworld
+  http:
+  - fault:
+      delay:
+        percentage:
+          value: 100.0
+        fixedDelay: 5s
+    route:
+    - destination:
+        host: helloworld
+        port:
+          number: 5000
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: hello-world-vs
+spec:
+  hosts:
+  - helloworld
+  http:
+  - fault:
+      abort:
+        percentage:
+          value: 100.0
+        httpStatus: 500
+    route:
+    - destination:
+        host: helloworld
+        port:
+          number: 5000
+

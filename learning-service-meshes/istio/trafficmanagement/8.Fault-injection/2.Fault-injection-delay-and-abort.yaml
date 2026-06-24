@@ -1,0 +1,44 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: app-vs
+  namespace: frontend
+spec:
+  hosts:
+  - app-svc
+  http:
+  - fault:
+      delay:
+        percentage:
+          value: 100.0
+        fixedDelay: 5s
+    route:
+    - destination:
+        host: app-svc.frontend.svc.cluster.local
+        port:
+          number: 80
+        subset: v1
+
+---
+
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: app-vs
+  namespace: frontend
+spec:
+  hosts:
+  - app-svc
+  http:
+  - fault:
+      abort:
+        percentage:
+          value: 50.0
+        httpStatus: 400
+    route:
+    - destination:
+        host: app-svc.frontend.svc.cluster.local
+        port:
+          number: 80
+        subset: v1
+
